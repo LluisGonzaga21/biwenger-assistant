@@ -40,14 +40,14 @@ _CACHE_FILES = {
     "ofertas_raw": CACHE_DIR / "ofertas_raw.json",
 }
 
-POSICIONES = {1: "Portero", 2: "Defensa", 3: "Centrocampista", 4: "Delantero"}
+POSICIONES = {1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward"}
 
 # Player 'status' values that mean they are not available to play. Confirmed
 # with real API data: "ok", "doubt", "injured", "sanctioned", "discarded".
 # "doubt" (last-minute doubt) is deliberately left OUT -- it usually means
 # they might play, not that they definitely won't, so it is not
 # automatically excluded from the recommenders (it's still shown in the
-# 'Estado' column so you can decide for yourself). If you see another new
+# 'Status' column so you can decide for yourself). If you see another new
 # value in output/cache/detalles.json, add it here.
 ESTADOS_NO_DISPONIBLE = {"injured", "sanctioned", "discarded"}
 
@@ -327,7 +327,7 @@ def is_irrelevant_player(detalle, score_id, temporada_actual_id=None, temporada_
     - unknown market value or <= VALOR_MINIMO_RELEVANTE ("clutter"), or
     - not registered with any top-division team ('team' empty in the API --
       see the Owono case), or
-    - hasn't debuted this season (no 'Puntos temporada actual') AND played
+    - hasn't debuted this season (no 'Points current season') AND played
       less than half the matches last season (essentially inactive player
       or out of the first team).
     """
@@ -373,37 +373,37 @@ def build_player_row(pid, detalle, score_id, extra=None,
 
     fila = {
         "player_id": pid,
-        "Jugador": nombre,
-        "Posicion": posicion,
-        "Equipo LaLiga": equipo,
-        "Estado": first_present(detalle, ["status"], "ok"),
-        "Disponible": is_available(detalle),
-        "Valor de mercado": valor_actual,
-        "Tendencia precio (7d) %": price_trend(detalle),
+        "Player": nombre,
+        "Position": posicion,
+        "LaLiga Team": equipo,
+        "Status": first_present(detalle, ["status"], "ok"),
+        "Available": is_available(detalle),
+        "Market value": valor_actual,
+        "Price trend (7d) %": price_trend(detalle),
         # column names are FIXED on purpose (not the literal season name,
         # e.g. "Temporada 2025/2026") -- otherwise players without a
         # previous season (debutants, signings from abroad) would generate
-        # different columns ("Puntos temp. anterior") and the df would fill
-        # up with near-duplicate columns. 'Temporada actual/anterior' carry
+        # different columns ("Points prev. season") and the df would fill
+        # up with near-duplicate columns. 'Current season'/'Previous season' carry
         # the real label if you ever need to check it.
-        "Temporada actual": etq_actual,
-        "Puntos temporada actual": pts_actual,
-        "Partidos temporada actual": partidos_actual,
-        "Pts/partido (actual)": points_per_match(pts_actual, partidos_actual),
-        "Ratio pts/VM (actual)": ratio(pts_actual, valor_actual),
-        "Temporada anterior": etq_anterior,
-        "Puntos temporada anterior": pts_anterior,
-        "Partidos temporada anterior": partidos_anterior,
-        "Pts/partido (anterior)": points_per_match(pts_anterior, partidos_anterior),
-        "Ratio pts/VM (anterior)": ratio(pts_anterior, valor_actual),
-        "Forma (ult. partidos)": calculate_form(detalle, score_id),
-        "Puntuacion potencial": potential_score(
+        "Current season": etq_actual,
+        "Points current season": pts_actual,
+        "Matches current season": partidos_actual,
+        "Pts/match (current)": points_per_match(pts_actual, partidos_actual),
+        "Ratio pts/MV (current)": ratio(pts_actual, valor_actual),
+        "Previous season": etq_anterior,
+        "Points previous season": pts_anterior,
+        "Matches previous season": partidos_anterior,
+        "Pts/match (previous)": points_per_match(pts_anterior, partidos_anterior),
+        "Ratio pts/MV (previous)": ratio(pts_anterior, valor_actual),
+        "Form (last matches)": calculate_form(detalle, score_id),
+        "Potential score": potential_score(
             detalle, score_id, temporada_actual_id=temporada_actual_id, temporada_anterior_id=temporada_anterior_id
         ),
-        "Proximo rival": proximo.get("rival"),
-        "Local/Visitante": ("Local" if proximo.get("es_local") else "Visitante") if proximo else None,
-        "Dificultad proximo partido": proximo.get("dificultad"),
-        "Jornada proxima": proximo.get("jornada"),
+        "Next opponent": proximo.get("rival"),
+        "Home/Away": ("Home" if proximo.get("es_local") else "Away") if proximo else None,
+        "Next match difficulty": proximo.get("dificultad"),
+        "Next matchday": proximo.get("jornada"),
     }
     fila.update(extra)
     return fila
@@ -417,11 +417,11 @@ def suggest_signings(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True,
     potencial') in the same position.
 
     df: the combined DataFrame from build_dataframe() (needs the
-    columns 'Origen', 'Posicion', 'Puntuacion potencial' and, for the cost,
-    'Precio en mercado' and/or 'Clausula').
+    columns 'Source', 'Position', 'Potential score' and, for the cost,
+    'Market price' and/or 'Clause').
     balance: your available balance (maximum amount to spend).
     solo_disponibles: if True (default), discards injured or suspended
-    candidates ('Disponible' == False).
+    candidates ('Available' == False).
     ordenar_por: 'mejora' (default, absolute improvement in pts/match) or
     'eficiencia' (improvement per million spent -- prioritizes cheap
     signings that improve you a little over very expensive signings that
@@ -429,73 +429,73 @@ def suggest_signings(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True,
 
     Always discards rival buyout clauses that are currently locked (after a
     recent purchase/clause buyout, the API would reject it) -- see
-    'Clausula bloqueada hasta' in the df.
+    'Clause locked until' in the df.
     """
-    requeridas = {"Origen", "Posicion", "Puntuacion potencial"}
+    requeridas = {"Source", "Position", "Potential score"}
     faltan = requeridas - set(df.columns)
     if faltan:
         raise ValueError(f"The DataFrame is missing columns: {faltan}")
     if ordenar_por not in ("mejora", "eficiencia"):
         raise ValueError("ordenar_por must be 'mejora' or 'eficiencia'")
 
-    mi_equipo = df[(df["Origen"] == "Mi equipo") & df["Puntuacion potencial"].notna()]
+    mi_equipo = df[(df["Source"] == "My team") & df["Potential score"].notna()]
     if mi_equipo.empty:
-        raise ValueError("There are no 'Mi equipo' players with a computable Puntuacion potencial.")
+        raise ValueError("There are no 'My team' players with a computable Puntuacion potencial.")
 
-    mi_equipo_ordenado = mi_equipo.sort_values("Puntuacion potencial")
-    listones = mi_equipo_ordenado.groupby("Posicion")["Puntuacion potencial"].min()
-    peor_jugador = mi_equipo_ordenado.groupby("Posicion")["Jugador"].first()
+    mi_equipo_ordenado = mi_equipo.sort_values("Potential score")
+    listones = mi_equipo_ordenado.groupby("Position")["Potential score"].min()
+    peor_jugador = mi_equipo_ordenado.groupby("Position")["Player"].first()
     # how many of your players in each position perform below your own
     # median there -- more than one indicates a position with more than one
     # weak link, not just the worst one
-    medianas_propias = mi_equipo.groupby("Posicion")["Puntuacion potencial"].median()
-    total_propios = mi_equipo.groupby("Posicion")["Jugador"].count()
+    medianas_propias = mi_equipo.groupby("Position")["Potential score"].median()
+    total_propios = mi_equipo.groupby("Position")["Player"].count()
     flojos_propios = (
-        mi_equipo[mi_equipo["Puntuacion potencial"] <= mi_equipo["Posicion"].map(medianas_propias)]
-        .groupby("Posicion")["Jugador"].count()
+        mi_equipo[mi_equipo["Potential score"] <= mi_equipo["Position"].map(medianas_propias)]
+        .groupby("Position")["Player"].count()
     )
 
-    candidatos = df[df["Origen"] != "Mi equipo"].copy()
-    if solo_disponibles and "Disponible" in candidatos.columns:
-        candidatos = candidatos[candidatos["Disponible"]]
-    if "Clausula disponible ahora" in candidatos.columns:
+    candidatos = df[df["Source"] != "My team"].copy()
+    if solo_disponibles and "Available" in candidatos.columns:
+        candidatos = candidatos[candidatos["Available"]]
+    if "Clause available now" in candidatos.columns:
         # Mercado rows don't have this column (NaN) -- they're let through,
         # only rival clauses EXPLICITLY locked right now are discarded
-        candidatos = candidatos[candidatos["Clausula disponible ahora"] != False]  # noqa: E712
-    coste_mercado = candidatos["Precio en mercado"] if "Precio en mercado" in candidatos else None
-    coste_clausula = candidatos["Clausula"] if "Clausula" in candidatos else None
+        candidatos = candidatos[candidatos["Clause available now"] != False]  # noqa: E712
+    coste_mercado = candidatos["Market price"] if "Market price" in candidatos else None
+    coste_clausula = candidatos["Clause"] if "Clause" in candidatos else None
     if coste_mercado is not None and coste_clausula is not None:
-        candidatos["Coste fichaje"] = coste_mercado.combine_first(coste_clausula)
+        candidatos["Signing cost"] = coste_mercado.combine_first(coste_clausula)
     else:
-        candidatos["Coste fichaje"] = coste_mercado if coste_mercado is not None else coste_clausula
+        candidatos["Signing cost"] = coste_mercado if coste_mercado is not None else coste_clausula
 
-    candidatos = candidatos[candidatos["Coste fichaje"].notna() & (candidatos["Coste fichaje"] <= balance)]
-    candidatos = candidatos[candidatos["Puntuacion potencial"].notna()]
-    candidatos = candidatos[candidatos["Posicion"].isin(listones.index)]
+    candidatos = candidatos[candidatos["Signing cost"].notna() & (candidatos["Signing cost"] <= balance)]
+    candidatos = candidatos[candidatos["Potential score"].notna()]
+    candidatos = candidatos[candidatos["Position"].isin(listones.index)]
 
-    candidatos["Tu listón en esa posicion"] = candidatos["Posicion"].map(listones)
-    candidatos["Jugador que reemplazarías"] = candidatos["Posicion"].map(peor_jugador)
-    candidatos["Mejora estimada (pts/partido)"] = (
-        candidatos["Puntuacion potencial"] - candidatos["Tu listón en esa posicion"]
+    candidatos["Your baseline in that position"] = candidatos["Position"].map(listones)
+    candidatos["Player you would replace"] = candidatos["Position"].map(peor_jugador)
+    candidatos["Estimated improvement (pts/match)"] = (
+        candidatos["Potential score"] - candidatos["Your baseline in that position"]
     )
-    candidatos = candidatos[candidatos["Mejora estimada (pts/partido)"] > 0]
+    candidatos = candidatos[candidatos["Estimated improvement (pts/match)"] > 0]
 
-    candidatos["Saldo tras fichar"] = balance - candidatos["Coste fichaje"]
-    candidatos["Mejora por millon gastado"] = (
-        candidatos["Mejora estimada (pts/partido)"] / (candidatos["Coste fichaje"] / 1_000_000)
+    candidatos["Balance after signing"] = balance - candidatos["Signing cost"]
+    candidatos["Improvement per million spent"] = (
+        candidatos["Estimated improvement (pts/match)"] / (candidatos["Signing cost"] / 1_000_000)
     ).round(3)
-    candidatos["Jugadores flojos en tu posicion"] = (
-        candidatos["Posicion"].map(flojos_propios).fillna(0).astype(int)
+    candidatos["Weak players in your position"] = (
+        candidatos["Position"].map(flojos_propios).fillna(0).astype(int)
     )
-    candidatos["Total en tu posicion"] = candidatos["Posicion"].map(total_propios).fillna(0).astype(int)
+    candidatos["Total in your position"] = candidatos["Position"].map(total_propios).fillna(0).astype(int)
 
-    columna_orden = "Mejora por millon gastado" if ordenar_por == "eficiencia" else "Mejora estimada (pts/partido)"
+    columna_orden = "Improvement per million spent" if ordenar_por == "eficiencia" else "Estimated improvement (pts/match)"
 
     columnas = [
-        "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Origen", "Coste fichaje",
-        "Saldo tras fichar", "Vendedor (id)", "Puntuacion potencial", "Jugador que reemplazarías",
-        "Tu listón en esa posicion", "Mejora estimada (pts/partido)", "Mejora por millon gastado",
-        "Jugadores flojos en tu posicion", "Total en tu posicion",
+        "player_id", "Player", "Position", "LaLiga Team", "Source", "Signing cost",
+        "Balance after signing", "Seller (id)", "Potential score", "Player you would replace",
+        "Your baseline in that position", "Estimated improvement (pts/match)", "Improvement per million spent",
+        "Weak players in your position", "Total in your position",
     ]
     return (
         candidatos[columnas]
@@ -516,21 +516,21 @@ def unique_by_player(df: pd.DataFrame) -> pd.DataFrame:
     others.
 
     This function collapses those rows into one per player, combining the
-    different 'Origen' values into a single text (e.g. 'Mercado + Rival:
+    different 'Source' values into a single text (e.g. 'Mercado + Rival:
     Botas FC'). Use it before a top-N when you don't care where they can be
     obtained from, only the performance ranking.
     """
     if df.empty or "player_id" not in df.columns:
         return df
-    otras_cols = [c for c in df.columns if c not in ("player_id", "Origen")]
+    otras_cols = [c for c in df.columns if c not in ("player_id", "Source")]
     combinado = df.groupby("player_id", as_index=False).agg({
         **{c: "first" for c in otras_cols},
-        "Origen": lambda s: " + ".join(sorted(set(s))),
+        "Source": lambda s: " + ".join(sorted(set(s))),
     })
     return combinado[df.columns.tolist()]
 
 
-def cost_per_point(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20) -> pd.DataFrame:
+def cost_per_point(df: pd.DataFrame, metrica="Potential score", margen_pct=20) -> pd.DataFrame:
     """
     For each player (any position/origin), how much it costs (Valor de
     mercado) per point of performance (`metrica`) they generate, and how
@@ -545,38 +545,38 @@ def cost_per_point(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=
     Players with metrica <= 0 (a negative or infinite cost per point makes
     no sense) or without a market value are excluded.
     """
-    validos = df[df[metrica].notna() & (df[metrica] > 0) & df["Valor de mercado"].notna() & (df["Valor de mercado"] > 0)].copy()
-    validos["Coste por punto"] = (validos["Valor de mercado"] / validos[metrica]).round(0)
+    validos = df[df[metrica].notna() & (df[metrica] > 0) & df["Market value"].notna() & (df["Market value"] > 0)].copy()
+    validos["Cost per point"] = (validos["Market value"] / validos[metrica]).round(0)
 
-    media_juego = validos["Coste por punto"].median()
-    validos["Media del juego (referencia)"] = media_juego
-    validos["% vs media del juego"] = ((validos["Coste por punto"] - media_juego) / media_juego * 100).round(1)
+    media_juego = validos["Cost per point"].median()
+    validos["Game average (reference)"] = media_juego
+    validos["% vs game average"] = ((validos["Cost per point"] - media_juego) / media_juego * 100).round(1)
 
     def label(pct):
         if pct <= -margen_pct:
-            return "Muy por debajo (barato)"
+            return "Well below (cheap)"
         if pct >= margen_pct:
-            return "Muy por encima (caro)"
-        return "En la media"
+            return "Well above (expensive)"
+        return "Average"
 
-    validos["Valoracion"] = validos["% vs media del juego"].apply(label)
+    validos["Rating"] = validos["% vs game average"].apply(label)
 
     columnas = [c for c in [
-        "player_id", "Jugador", "Posicion", "Origen", "Valor de mercado", metrica,
-        "Coste por punto", "Media del juego (referencia)", "% vs media del juego", "Valoracion",
+        "player_id", "Player", "Position", "Source", "Market value", metrica,
+        "Cost per point", "Game average (reference)", "% vs game average", "Rating",
     ] if c in validos.columns]
-    return validos[columnas].sort_values("Coste por punto").reset_index(drop=True)
+    return validos[columnas].sort_values("Cost per point").reset_index(drop=True)
 
 
 def best_players(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
-                       metrica="Puntuacion potencial", solo_disponibles=True):
+                       metrica="Potential score", solo_disponibles=True):
     """
     General player ranking by performance metric (default 'Puntuacion
     potencial'), without looking at price or whether you can afford it.
     Works as a watchlist: who's in the best form right now.
 
-    posicion: filters by 'Portero'/'Defensa'/'Centrocampista'/'Delantero'.
-    origen: filters by 'Mercado', 'Mi equipo', or a rival's exact 'Origen'
+    posicion: filters by 'Goalkeeper'/'Defender'/'Midfielder'/'Forward'.
+    origen: filters by 'Market', 'My team', or a rival's exact 'Source'
     (e.g. 'Rival: Botas FC'). By default it doesn't filter (includes all),
     and in that case it collapses players duplicated across several
     origins (see unique_by_player) so they don't take up several spots in
@@ -584,19 +584,19 @@ def best_players(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
     solo_disponibles: if True (default), discards injured/suspended players.
     """
     resultado = df.dropna(subset=[metrica])
-    if solo_disponibles and "Disponible" in resultado.columns:
-        resultado = resultado[resultado["Disponible"]]
+    if solo_disponibles and "Available" in resultado.columns:
+        resultado = resultado[resultado["Available"]]
     if posicion:
-        resultado = resultado[resultado["Posicion"] == posicion]
+        resultado = resultado[resultado["Position"] == posicion]
     if origen:
-        resultado = resultado[resultado["Origen"] == origen]
+        resultado = resultado[resultado["Source"] == origen]
     else:
         resultado = unique_by_player(resultado)
 
     columnas = [c for c in [
-        "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Origen",
-        metrica, "Forma (ult. partidos)", "Proximo rival", "Dificultad proximo partido",
-        "Valor de mercado", "Tendencia precio (7d) %", "Clausula", "Precio en mercado",
+        "player_id", "Player", "Position", "LaLiga Team", "Source",
+        metrica, "Form (last matches)", "Next opponent", "Next match difficulty",
+        "Market value", "Price trend (7d) %", "Clause", "Market price",
     ] if c in resultado.columns]
 
     return (
@@ -607,20 +607,20 @@ def best_players(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
     )
 
 
-def calculate_reference_ratio(df: pd.DataFrame, metrica="Puntuacion potencial"):
+def calculate_reference_ratio(df: pd.DataFrame, metrica="Potential score"):
     """
     Reference ratio (metric / market value in millions) per position,
     computed with the MEDIAN of all valid players (market + rivals + your
     team -> broad sample). This is the basis for estimating a "fair"
     market value from performance.
     """
-    tmp = df.dropna(subset=[metrica, "Valor de mercado"])
-    tmp = tmp[tmp["Valor de mercado"] > 0].copy()
-    tmp["_ratio"] = tmp[metrica] / (tmp["Valor de mercado"] / 1_000_000)
-    return tmp.groupby("Posicion")["_ratio"].median()
+    tmp = df.dropna(subset=[metrica, "Market value"])
+    tmp = tmp[tmp["Market value"] > 0].copy()
+    tmp["_ratio"] = tmp[metrica] / (tmp["Market value"] / 1_000_000)
+    return tmp.groupby("Position")["_ratio"].median()
 
 
-def estimate_fair_value(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True):
+def estimate_fair_value(df: pd.DataFrame, metrica="Potential score", margen_pct=20, solo_disponibles=True):
     """
     For players FOR SALE on the market, estimates a "fair value" based on
     how the rest of the players in your league (in that same position)
@@ -631,54 +631,54 @@ def estimate_fair_value(df: pd.DataFrame, metrica="Puntuacion potencial", margen
     This is a heuristic based on similar players in your own league, NOT
     the "real" price according to Biwenger -- use it as guidance, not
     absolute truth. margen_pct: the % difference threshold above/below
-    which it's labeled 'Chollo'/'Caro' (below that it's considered 'Precio
+    which it's labeled 'Bargain'/'Expensive' (below that it's considered 'Precio
     justo').
     solo_disponibles: if True (default), discards injured/suspended players
     (a bargain that can't play isn't much of a bargain).
     """
     ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
-    mercado = df[df["Origen"] == "Mercado"].dropna(subset=[metrica, "Precio en mercado"]).copy()
-    if solo_disponibles and "Disponible" in mercado.columns:
-        mercado = mercado[mercado["Disponible"]]
-    mercado["Ratio referencia posicion"] = mercado["Posicion"].map(ratios_ref)
-    mercado = mercado.dropna(subset=["Ratio referencia posicion"])
-    mercado["Valor justo estimado"] = (
-        mercado[metrica] / mercado["Ratio referencia posicion"] * 1_000_000
+    mercado = df[df["Source"] == "Market"].dropna(subset=[metrica, "Market price"]).copy()
+    if solo_disponibles and "Available" in mercado.columns:
+        mercado = mercado[mercado["Available"]]
+    mercado["Position reference ratio"] = mercado["Position"].map(ratios_ref)
+    mercado = mercado.dropna(subset=["Position reference ratio"])
+    mercado["Estimated fair value"] = (
+        mercado[metrica] / mercado["Position reference ratio"] * 1_000_000
     ).round(-3)
-    mercado["Diferencia vs precio pedido"] = mercado["Valor justo estimado"] - mercado["Precio en mercado"]
-    mercado["% sobre precio pedido"] = (
-        mercado["Diferencia vs precio pedido"] / mercado["Precio en mercado"] * 100
+    mercado["Difference vs asking price"] = mercado["Estimated fair value"] - mercado["Market price"]
+    mercado["% over asking price"] = (
+        mercado["Difference vs asking price"] / mercado["Market price"] * 100
     ).round(1)
     # it never makes sense to offer more than the asking price, nor more
     # than what we consider their fair value
-    mercado["Oferta sugerida"] = mercado[["Valor justo estimado", "Precio en mercado"]].min(axis=1)
+    mercado["Suggested offer"] = mercado[["Estimated fair value", "Market price"]].min(axis=1)
 
     def label(pct):
         if pct >= margen_pct:
-            return "Chollo"
+            return "Bargain"
         if pct <= -margen_pct:
-            return "Caro"
-        return "Precio justo"
+            return "Expensive"
+        return "Fair price"
 
-    mercado["Valoracion"] = mercado["% sobre precio pedido"].apply(label)
+    mercado["Rating"] = mercado["% over asking price"].apply(label)
 
     columnas = [
-        "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Precio en mercado",
-        "Valor justo estimado", "Diferencia vs precio pedido", "% sobre precio pedido",
-        "Valoracion", "Oferta sugerida", "Vendedor (id)",
+        "player_id", "Player", "Position", "LaLiga Team", "Market price",
+        "Estimated fair value", "Difference vs asking price", "% over asking price",
+        "Rating", "Suggested offer", "Seller (id)",
     ]
     return (
         mercado[columnas]
-        .sort_values("% sobre precio pedido", ascending=False)
+        .sort_values("% over asking price", ascending=False)
         .reset_index(drop=True)
     )
 
 
 def suggest_market_offer(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5,
-                            metrica="Puntuacion potencial", rango_comparables_pct=40):
+                            metrica="Potential score", rango_comparables_pct=40):
     """
-    For each FREE-AGENT player on the market (Origen == 'Mercado'; doesn't
+    For each FREE-AGENT player on the market (Origen == 'Market'; doesn't
     apply to buyout clauses -- the amount there is fixed, not bid on),
     estimates how much you'd actually need to bid to land them, not just
     how much they're "worth" per your own heuristic.
@@ -712,11 +712,11 @@ def suggest_market_offer(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5
     """
     ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
-    mercado = df[df["Origen"] == "Mercado"].dropna(subset=[metrica, "Precio en mercado"]).copy()
-    mercado["Ratio referencia posicion"] = mercado["Posicion"].map(ratios_ref)
-    mercado = mercado.dropna(subset=["Ratio referencia posicion"])
-    mercado["Valor justo estimado"] = (
-        mercado[metrica] / mercado["Ratio referencia posicion"] * 1_000_000
+    mercado = df[df["Source"] == "Market"].dropna(subset=[metrica, "Market price"]).copy()
+    mercado["Position reference ratio"] = mercado["Position"].map(ratios_ref)
+    mercado = mercado.dropna(subset=["Position reference ratio"])
+    mercado["Estimated fair value"] = (
+        mercado[metrica] / mercado["Position reference ratio"] * 1_000_000
     ).round(-3)
 
     # REAL purchase prices (what each current owner actually paid, not the buyout clause)
@@ -732,17 +732,17 @@ def suggest_market_offer(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5
     def comparable_price(row):
         if comparables.empty:
             return None
-        rango = row["Valor de mercado"] * rango_comparables_pct / 100
+        rango = row["Market value"] * rango_comparables_pct / 100
         similares = comparables[
-            (comparables["Posicion"] == row["Posicion"])
-            & (comparables["Valor de mercado"] >= row["Valor de mercado"] - rango)
-            & (comparables["Valor de mercado"] <= row["Valor de mercado"] + rango)
+            (comparables["Position"] == row["Position"])
+            & (comparables["Market value"] >= row["Market value"] - rango)
+            & (comparables["Market value"] <= row["Market value"] + rango)
         ]
         if similares.empty:
             return None
         return similares["precio_pagado"].median()
 
-    mercado["Precio pagado por comparables"] = mercado.apply(comparable_price, axis=1)
+    mercado["Price paid by comparables"] = mercado.apply(comparable_price, axis=1)
 
     # how many rivals (not you) have enough budget spare to beat the asking price
     mi_team_id = data["mi_team_id"]
@@ -754,33 +754,33 @@ def suggest_market_offer(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5
     def rivals_who_could_bid_more(precio_pedido):
         return sum(1 for mb in max_bids_rivales if mb > precio_pedido)
 
-    mercado["Rivales que podrian pujar mas"] = mercado["Precio en mercado"].apply(rivals_who_could_bid_more)
+    mercado["Rivals who could bid more"] = mercado["Market price"].apply(rivals_who_could_bid_more)
 
     def recommended_offer(row):
         # floor: never below the asking price -- Biwenger won't allow a lower bid
-        base = row["Precio en mercado"]
-        comparable = row["Precio pagado por comparables"]
+        base = row["Market price"]
+        comparable = row["Price paid by comparables"]
         if pd.notna(comparable) and comparable > base:
             base = comparable
-        if row["Rivales que podrian pujar mas"] > 0:
+        if row["Rivals who could bid more"] > 0:
             base = base * (1 + margen_sobre_pedido_pct / 100)
         return round(base / 1000) * 1000
 
-    mercado["Oferta recomendada"] = mercado.apply(recommended_offer, axis=1)
+    mercado["Recommended offer"] = mercado.apply(recommended_offer, axis=1)
 
     columnas = [
-        "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Precio en mercado",
-        "Valor justo estimado", "Precio pagado por comparables", "Rivales que podrian pujar mas",
-        "Oferta recomendada", "Vendedor (id)",
+        "player_id", "Player", "Position", "LaLiga Team", "Market price",
+        "Estimated fair value", "Price paid by comparables", "Rivals who could bid more",
+        "Recommended offer", "Seller (id)",
     ]
     return (
         mercado[columnas]
-        .sort_values("Oferta recomendada", ascending=False)
+        .sort_values("Recommended offer", ascending=False)
         .reset_index(drop=True)
     )
 
 
-def suggest_sales(df: pd.DataFrame, data: dict = None, metrica="Puntuacion potencial", margen_pct=20):
+def suggest_sales(df: pd.DataFrame, data: dict = None, metrica="Potential score", margen_pct=20):
     """
     The counterpart to estimate_fair_value but for YOUR roster: compares
     the OFFICIAL market value of each of your players with what their
@@ -803,48 +803,48 @@ def suggest_sales(df: pd.DataFrame, data: dict = None, metrica="Puntuacion poten
     """
     ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
-    mios = df[df["Origen"] == "Mi equipo"].dropna(subset=[metrica, "Valor de mercado"]).copy()
-    mios["Ratio referencia posicion"] = mios["Posicion"].map(ratios_ref)
-    mios = mios.dropna(subset=["Ratio referencia posicion"])
-    mios["Valor justo estimado"] = (
-        mios[metrica] / mios["Ratio referencia posicion"] * 1_000_000
+    mios = df[df["Source"] == "My team"].dropna(subset=[metrica, "Market value"]).copy()
+    mios["Position reference ratio"] = mios["Position"].map(ratios_ref)
+    mios = mios.dropna(subset=["Position reference ratio"])
+    mios["Estimated fair value"] = (
+        mios[metrica] / mios["Position reference ratio"] * 1_000_000
     ).round(-3)
-    mios["Diferencia (VM - justo)"] = mios["Valor de mercado"] - mios["Valor justo estimado"]
-    mios["% sobrevaloracion"] = (
-        mios["Diferencia (VM - justo)"] / mios["Valor justo estimado"] * 100
+    mios["Difference (MV - fair)"] = mios["Market value"] - mios["Estimated fair value"]
+    mios["% overvaluation"] = (
+        mios["Difference (MV - fair)"] / mios["Estimated fair value"] * 100
     ).round(1)
 
-    mios["Mejor oferta recibida"] = None
-    mios["Nº offers recibidas"] = 0
+    mios["Best offer received"] = None
+    mios["Offers received"] = 0
     if data is not None:
         recibidas = offers(data, tipo="recibidas", solo_identificadas=True)
         if not recibidas.empty:
-            mejor_oferta = recibidas.groupby("player_id")["Importe"].max()
-            n_ofertas = recibidas.groupby("player_id")["Importe"].count()
-            mios["Mejor oferta recibida"] = mios["player_id"].map(mejor_oferta)
-            mios["Nº offers recibidas"] = mios["player_id"].map(n_ofertas).fillna(0).astype(int)
+            mejor_oferta = recibidas.groupby("player_id")["Amount"].max()
+            n_ofertas = recibidas.groupby("player_id")["Amount"].count()
+            mios["Best offer received"] = mios["player_id"].map(mejor_oferta)
+            mios["Offers received"] = mios["player_id"].map(n_ofertas).fillna(0).astype(int)
 
     def label(row):
-        oferta = row["Mejor oferta recibida"]
-        if pd.notna(oferta) and oferta >= row["Valor justo estimado"]:
-            return "Vender ahora (tienes oferta igual o por encima del valor justo)"
-        if row["% sobrevaloracion"] >= margen_pct:
-            return "Vender ahora"
-        if row["% sobrevaloracion"] <= -margen_pct:
-            return "Infravalorado (no vender)"
-        return "Precio acorde a su rendimiento"
+        oferta = row["Best offer received"]
+        if pd.notna(oferta) and oferta >= row["Estimated fair value"]:
+            return "Sell now (you have an offer at or above fair value)"
+        if row["% overvaluation"] >= margen_pct:
+            return "Sell now"
+        if row["% overvaluation"] <= -margen_pct:
+            return "Undervalued (don't sell)"
+        return "Price matches performance"
 
-    mios["Recomendacion"] = mios.apply(label, axis=1)
+    mios["Recommendation"] = mios.apply(label, axis=1)
 
     columnas = [
-        "player_id", "Jugador", "Posicion", "Valor de mercado", "Clausula",
-        "Valor justo estimado", "Diferencia (VM - justo)", "% sobrevaloracion",
-        "Mejor oferta recibida", "Nº offers recibidas", "Recomendacion",
+        "player_id", "Player", "Position", "Market value", "Clause",
+        "Estimated fair value", "Difference (MV - fair)", "% overvaluation",
+        "Best offer received", "Offers received", "Recommendation",
     ]
     columnas = [c for c in columnas if c in mios.columns]
     return (
         mios[columnas]
-        .sort_values(["Mejor oferta recibida", "% sobrevaloracion"], ascending=False, na_position="last")
+        .sort_values(["Best offer received", "% overvaluation"], ascending=False, na_position="last")
         .reset_index(drop=True)
     )
 
@@ -1253,7 +1253,7 @@ def load_league_data(email, password, league_id=None, own_team_id=None, forzar_r
 def build_dataframe(data: dict) -> pd.DataFrame:
     """
     Builds the combined DataFrame (market + rivals + your team, each row
-    with its 'Origen') from what load_league_data() returns.
+    with its 'Source') from what load_league_data() returns.
 
     Determines the "current" league season by majority vote across all
     players (see most_common_league_season) so that a player who hasn't
@@ -1289,15 +1289,15 @@ def build_dataframe(data: dict) -> pd.DataFrame:
         filas.append(build_player_row(
             f["player_id"], detalle, score_id,
             {
-                "Origen": "Mercado",
-                "Precio en mercado": f.get("precio_mercado"),
-                "Vendedor (id)": f.get("vendedor_id"),
+                "Source": "Market",
+                "Market price": f.get("precio_mercado"),
+                "Seller (id)": f.get("vendedor_id"),
             },
             temporada_actual_id, temporada_anterior_id,
         ))
 
     for r in data["rosters_raw"].values():
-        origen = "Mi equipo" if r["es_mio"] else f"Rival: {r['nombre']}"
+        origen = "My team" if r["es_mio"] else f"Rival: {r['nombre']}"
         for f in r["filas"]:
             detalle = detalles.get(f["player_id"])
             if not detalle:
@@ -1314,23 +1314,23 @@ def build_dataframe(data: dict) -> pd.DataFrame:
             clausula = f.get("clausula")
             bloqueada_hasta = f.get("clausula_bloqueada_hasta")
             extra = {
-                "Origen": origen,
-                "Clausula": clausula,
+                "Source": origen,
+                "Clause": clausula,
                 # two ways to look at the ratio: by TOTAL points accumulated
                 # this season, or by AVERAGE points (per match) -- a player
                 # with few matches played can look bad on the total but
                 # good on the average, and vice versa
-                "Ratio pts totales/clausula (actual)": ratio(pts_actual, clausula),
-                "Ratio pts medios/clausula (actual)": ratio(points_per_match(pts_actual, partidos_actual), clausula),
-                "Ratio pts totales/clausula (anterior)": ratio(pts_anterior, clausula),
-                "Ratio pts medios/clausula (anterior)": ratio(
+                "Ratio total pts/clause (current)": ratio(pts_actual, clausula),
+                "Ratio avg pts/clause (current)": ratio(points_per_match(pts_actual, partidos_actual), clausula),
+                "Ratio total pts/clause (previous)": ratio(pts_anterior, clausula),
+                "Ratio avg pts/clause (previous)": ratio(
                     points_per_match(pts_anterior, partidos_anterior), clausula
                 ),
-                "Vendedor (id)": None if r["es_mio"] else r.get("team_id"),
-                "Clausula bloqueada hasta": (
+                "Seller (id)": None if r["es_mio"] else r.get("team_id"),
+                "Clause locked until": (
                     datetime.fromtimestamp(bloqueada_hasta) if bloqueada_hasta else None
                 ),
-                "Clausula disponible ahora": (
+                "Clause available now": (
                     not bloqueada_hasta or bloqueada_hasta <= datetime.now().timestamp()
                 ),
             }
@@ -1353,7 +1353,7 @@ def offers(data: dict, tipo="recibidas", solo_identificadas=False) -> pd.DataFra
 
     IMPORTANT: Biwenger automatically generates a "received" offer for
     EVERY player on your roster, close to their market value, with NO real
-    bidder behind it (bidder 'Desconocido', no 'de_id') -- it's the
+    bidder behind it (bidder 'Unknown', no 'de_id') -- it's the
     platform's quick sale, not real demand from another manager. Detected
     with real data: 15/15 players on a roster had one of these. Pass
     solo_identificadas=True to discard them and keep only offers from an
@@ -1376,13 +1376,13 @@ def offers(data: dict, tipo="recibidas", solo_identificadas=False) -> pd.DataFra
         filas.append({
             "offer_id": o.get("offer_id"),
             "player_id": pid,
-            "Jugador": nombre,
-            "Importe": o.get("importe"),
-            "Tipo": o.get("tipo"),
-            "Estado": o.get("estado"),
-            "De": o.get("de_nombre") or "Desconocido",
-            "A": o.get("a_nombre") or "Desconocido",
-            "Expira": datetime.fromtimestamp(expira) if expira else None,
+            "Player": nombre,
+            "Amount": o.get("importe"),
+            "Type": o.get("tipo"),
+            "Status": o.get("estado"),
+            "From": o.get("de_nombre") or "Unknown",
+            "To": o.get("a_nombre") or "Unknown",
+            "Expires": datetime.fromtimestamp(expira) if expira else None,
         })
     return pd.DataFrame(filas)
 

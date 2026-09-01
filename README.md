@@ -26,7 +26,7 @@ Everything is built on top of the **unofficial Biwenger API** (there's no public
 Biwenger shows you one player at a time. This project downloads **everything** relevant to your league (the market, every rival's squad, the detail of every player involved) and merges it into a single table you can sort, filter and cross-reference however you want. From there:
 
 - **Performance-per-price ratios**: points / market value, points / clause price (current and previous season), both in total and per match.
-- **`Puntuacion potencial` ("potential score")**: a custom metric that blends recent form (last matches, weighted — the most recent counts more) with last season's performance, so it doesn't put all its trust in a 2-match hot streak.
+- **`Potential score` ("potential score")**: a custom metric that blends recent form (last matches, weighted — the most recent counts more) with last season's performance, so it doesn't put all its trust in a 2-match hot streak.
 - **Fair market value**: for every player on the market, estimates whether they're cheap or expensive by comparing them to similar players in your own league (not an external "official" price).
 - **How much to bid**: combines your estimated fair value, how many rivals could outbid you, and what's actually been paid for similar players in your league — never suggests bidding below the asking price (Biwenger doesn't allow that anyway).
 - **Signing suggestions**: compares every affordable candidate (market or clause) against your weakest player, with no "this position is already covered" bias — it measures real improvement and tells you exactly who you'd be replacing.
@@ -110,23 +110,23 @@ The first run downloads the market + every manager's squad + the detail of every
 
 ### 2. Explore
 
-`df` has one row per player — market + every rival + your own team — with the `Origen` ("source") column to filter by. Examples:
+`df` has one row per player — market + every rival + your own team — with the `Source` ("source") column to filter by. Examples:
 
 ```python
 # Top 20 market bargains by points/market-value ratio
-df[df["Origen"] == "Mercado"].dropna(subset=["Ratio pts/VM (actual)"]) \
-    .sort_values("Ratio pts/VM (actual)", ascending=False).head(20)
+df[df["Source"] == "Market"].dropna(subset=["Ratio pts/MV (current)"]) \
+    .sort_values("Ratio pts/MV (current)", ascending=False).head(20)
 
 # Your squad sorted by performance (to spot your weakest players)
-df[df["Origen"] == "Mi equipo"].sort_values("Puntuacion potencial")
+df[df["Source"] == "My team"].sort_values("Potential score")
 
 # Best rival clause buyouts by points/clause ratio
-df[df["Origen"].str.startswith("Rival:")] \
-    .dropna(subset=["Ratio pts totales/clausula (actual)"]) \
-    .sort_values("Ratio pts totales/clausula (actual)", ascending=False).head(20)
+df[df["Source"].str.startswith("Rival:")] \
+    .dropna(subset=["Ratio total pts/clause (current)"]) \
+    .sort_values("Ratio total pts/clause (current)", ascending=False).head(20)
 ```
 
-**Important note about `Origen`**: `'Mercado'` means a *genuinely free* player (no owner, directly biddable). Market entries that DO have an owner (someone listed their own player for sale) do **not** count as `'Mercado'` — the only real way to sign them is a clause buyout, so they show up as `'Rival: <name>'` with their `Clausula` column filled in. On top of that, market/rivals already exclude "clutter" automatically (no top-flight team, value ≤ €400,000, or inactive players); your own squad is never filtered.
+**Important note about `Source`**: `'Market'` means a *genuinely free* player (no owner, directly biddable). Market entries that DO have an owner (someone listed their own player for sale) do **not** count as `'Market'` — the only real way to sign them is a clause buyout, so they show up as `'Rival: <name>'` with their `Clause` column filled in. On top of that, market/rivals already exclude "clutter" automatically (no top-flight team, value ≤ €400,000, or inactive players); your own squad is never filtered.
 
 ### 3. Charts
 
@@ -144,9 +144,9 @@ biwenger_helpers.suggest_signings(df, data["balance"], top_n=15)
 biwenger_helpers.suggest_signings(df, data["balance"], top_n=15, ordenar_por="eficiencia")
 ```
 
-Compares every affordable, available candidate against your weakest player **in that same position**, and only shows candidates that would actually improve on that player. It doesn't apply any "this line is already covered" bias — it measures real improvement and explicitly tells you who you'd be replacing (`Jugador que reemplazarías` column). Clauses that are temporarily locked after a recent purchase are automatically excluded.
+Compares every affordable, available candidate against your weakest player **in that same position**, and only shows candidates that would actually improve on that player. It doesn't apply any "this line is already covered" bias — it measures real improvement and explicitly tells you who you'd be replacing (`Player you would replace` column). Clauses that are temporarily locked after a recent purchase are automatically excluded.
 
-Key columns: `Saldo tras fichar` (balance after signing), `Jugadores flojos en tu posicion` / `Total en tu posicion` (how many of your players in that position perform below your own median there), `Mejora por millon gastado` (improvement per million spent).
+Key columns: `Balance after signing` (balance after signing), `Weak players in your position` / `Total in your position` (how many of your players in that position perform below your own median there), `Improvement per million spent` (improvement per million spent).
 
 > 💡 This is a rough suggestion based on the `balance` you pass in — it doesn't account for Biwenger's real `maximumBid` (which can be significantly higher than your balance, since Biwenger lets you bid into the red using your squad's value as collateral). If you want to use your real bidding limit, pass it in yourself instead of `data["balance"]`.
 
@@ -154,16 +154,16 @@ Key columns: `Saldo tras fichar` (balance after signing), `Jugadores flojos en t
 
 ```python
 biwenger_helpers.best_players(df, top_n=20)                                    # top 20 overall
-biwenger_helpers.best_players(df, posicion="Delantero", origen="Mercado")       # filtered
+biwenger_helpers.best_players(df, posicion="Forward", origen="Market")       # filtered
 ```
 
-A watchlist of who's performing best right now (by `Puntuacion potencial`), regardless of price or whether you can afford them. Excludes injured/suspended players by default.
+A watchlist of who's performing best right now (by `Potential score`), regardless of price or whether you can afford them. Excludes injured/suspended players by default.
 
 ### 6. Fair market value
 
 ```python
 valor_justo = biwenger_helpers.estimate_fair_value(df, margen_pct=20)
-valor_justo[valor_justo["Valoracion"] == "Chollo"]
+valor_justo[valor_justo["Rating"] == "Bargain"]
 
 # How much to bid for a genuinely free market player
 biwenger_helpers.suggest_market_offer(df, data)
@@ -177,7 +177,7 @@ For every player on the market, `estimate_fair_value` calculates the median perf
 
 ```python
 ventas = biwenger_helpers.suggest_sales(df, data=data, margen_pct=20)
-ventas[ventas["Recomendacion"] == "Vender ahora"]
+ventas[ventas["Recommendation"] == "Sell now"]
 ```
 
 The counterpart to section 6 for your own squad: players whose market value has shot up well beyond what their actual performance would justify. It also cross-checks real offers you've already received (filtering out Biwenger's automatic "Unknown" instant-sell offers, which aren't real demand).
@@ -209,38 +209,36 @@ Real actions on your league — read the [safety](#safety-when-biddingbuying-out
 cliente_operaciones = BiwengerClient(EMAIL, PASSWORD, league_id=LEAGUE_ID)
 biwenger_helpers.login_and_resolve_league(cliente_operaciones, LEAGUE_ID)
 
-# 'Vendedor (id)' from the tables above is what goes into 'to'
-cliente_operaciones.place_offer(player_id, importe, to=vendedor_id)                    # dry-run: only prints the payload
-cliente_operaciones.place_offer(player_id, importe, to=vendedor_id, confirm=True)      # actually executes it
+# 'Seller (id)' from the tables above is what goes into 'to'
+cliente_operaciones.place_offer(player_id, amount, to=seller_id)                    # dry-run: only prints the payload
+cliente_operaciones.place_offer(player_id, amount, to=seller_id, confirm=True)      # actually executes it
 ```
 
 ## The DataFrame: columns explained
 
-Column names are kept in Spanish (matching the live Biwenger data and the rest of the code); this table explains what each one means.
-
 | Column | What it is |
 |---|---|
 | `player_id` | Biwenger's internal ID for the player |
-| `Jugador`, `Posicion`, `Equipo LaLiga` | Name, position, LaLiga club |
-| `Estado`, `Disponible` | `Disponible=False` if injured/suspended/discarded (`'doubt'` does not count as unavailable) |
-| `Valor de mercado` | Current official market value, in euros |
-| `Tendencia precio (7d) %` | Market value change over the last 7 days |
-| `Temporada actual` / `anterior` | Real season label (e.g. "Temporada 2025/2026"); the column name is always the same, computed by majority vote across all players so it doesn't misalign for someone who hasn't played recently |
-| `Puntos temporada actual` / `anterior` | Total accumulated points |
-| `Partidos temporada actual` / `anterior` | Matches played |
-| `Pts/partido (actual)` / `(anterior)` | Total points ÷ matches |
-| `Ratio pts/VM (actual)` / `(anterior)` | Total points ÷ market value (in millions) |
-| `Forma (ult. partidos)` | Weighted average of the last few matches, weighting more recent ones higher (exponential decay) |
-| `Puntuacion potencial` | `Forma` (70%) + previous season's points per match (30%) — the metric used by the rankings and recommenders |
-| `Proximo rival`, `Local/Visitante`, `Dificultad proximo partido`, `Jornada proxima` | Their next LaLiga match |
-| `Origen` | `'Mercado'` (free agent), `'Mi equipo'` (your team), or `'Rival: <name>'` |
-| `Precio en mercado`, `Vendedor (id)` | Only when `Origen == 'Mercado'` |
-| `Clausula`, `Clausula bloqueada hasta`, `Clausula disponible ahora` | Only for rival/your own players |
-| `Ratio pts totales/clausula` / `Ratio pts medios/clausula` (`actual`/`anterior`) | Same ratio as above but against the clause price instead of market value — by total points or by points-per-match (a player with few matches played can look bad in the total but fine in the average) |
+| `Player`, `Position`, `LaLiga Team` | Name, position, LaLiga club |
+| `Status`, `Available` | `Available=False` if injured/suspended/discarded (`'doubt'` does not count as unavailable) |
+| `Market value` | Current official market value, in euros |
+| `Price trend (7d) %` | Market value change over the last 7 days |
+| `Current season` / `Previous season` | Real season label (e.g. "Temporada 2025/2026"); the column name is always the same, computed by majority vote across all players so it doesn't misalign for someone who hasn't played recently |
+| `Points current season` / `Points previous season` | Total accumulated points |
+| `Matches current season` / `Matches previous season` | Matches played |
+| `Pts/match (current)` / `(previous)` | Total points ÷ matches |
+| `Ratio pts/MV (current)` / `(previous)` | Total points ÷ market value (in millions) |
+| `Form (last matches)` | Weighted average of the last few matches, weighting more recent ones higher (exponential decay) |
+| `Potential score` | `Form` (70%) + previous season's points per match (30%) — the metric used by the rankings and recommenders |
+| `Next opponent`, `Home/Away`, `Next match difficulty`, `Next matchday` | Their next LaLiga match |
+| `Source` | `'Market'` (free agent), `'My team'` (your team), or `'Rival: <name>'` |
+| `Market price`, `Seller (id)` | Only when `Source == 'Market'` |
+| `Clause`, `Clause locked until`, `Clause available now` | Only for rival/your own players |
+| `Ratio total pts/clause` / `Ratio avg pts/clause` (`current`/`previous`) | Same ratio as above but against the clause price instead of market value — by total points or by points-per-match (a player with few matches played can look bad in the total but fine in the average) |
 
 ## Function reference (`biwenger_helpers.py`)
 
-Function names are in English; their parameters stay in Spanish, matching the DataFrame columns they filter/compare against.
+Function and DataFrame column names are in English. Parameter names (and the mode strings some of them take, like `tipo="recibidas"`/`"enviadas"`) stay in Spanish — that part of the calling convention wasn't in scope for this pass.
 
 ### Loading and cache
 
@@ -254,12 +252,12 @@ Function names are in English; their parameters stay in Spanish, matching the Da
 
 | Function | What it does |
 |---|---|
-| `best_players(df, posicion=None, origen=None, top_n=20, metrica="Puntuacion potencial", solo_disponibles=True)` | Filterable ranking/watchlist |
-| `estimate_fair_value(df, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True)` | Bargain/Expensive/Fair labeling for the market |
-| `suggest_market_offer(df, data, margen_sobre_pedido_pct=5, metrica="Puntuacion potencial", rango_comparables_pct=40)` | How much to bid for a genuinely free market player |
+| `best_players(df, posicion=None, origen=None, top_n=20, metrica="Potential score", solo_disponibles=True)` | Filterable ranking/watchlist |
+| `estimate_fair_value(df, metrica="Potential score", margen_pct=20, solo_disponibles=True)` | Bargain/Expensive/Fair labeling for the market |
+| `suggest_market_offer(df, data, margen_sobre_pedido_pct=5, metrica="Potential score", rango_comparables_pct=40)` | How much to bid for a genuinely free market player |
 | `suggest_signings(df, balance, top_n=15, solo_disponibles=True, ordenar_por="mejora")` | Candidates that improve on your weakest player in their position (`ordenar_por="eficiencia"` to prioritize cost/benefit instead) |
-| `suggest_sales(df, data=None, metrica="Puntuacion potencial", margen_pct=20)` | Your overvalued players, cross-checked against real offers |
-| `cost_per_point(df, metrica="Puntuacion potencial", margen_pct=20)` | Cost per point for every player against the median of the ENTIRE game (all positions combined), to see if they're cheap/expensive in absolute terms |
+| `suggest_sales(df, data=None, metrica="Potential score", margen_pct=20)` | Your overvalued players, cross-checked against real offers |
+| `cost_per_point(df, metrica="Potential score", margen_pct=20)` | Cost per point for every player against the median of the ENTIRE game (all positions combined), to see if they're cheap/expensive in absolute terms |
 | `offers(data, tipo="recibidas", solo_identificadas=False)` | Active buy offers (`solo_identificadas=True` drops Biwenger's automatic offers, which aren't real demand) |
 
 ### Internal building blocks (in case you tweak something)
@@ -275,7 +273,7 @@ Function names are in English; their parameters stay in Spanish, matching the Da
 
 `client.place_offer(...)` runs in **dry-run mode by default**: without `confirm=True` nothing is sent to Biwenger, it just prints the payload that would be sent (player, amount, to whom). Always double-check that payload before confirming — passing `confirm=True` actually executes the offer, spends or commits your balance, and **cannot be undone** from here.
 
-The `to` field is the `user_id` of the player's current owner (matches the `team_id` you see in the standings). For a market player use `client.find_market_seller(player_id)` or the `Vendedor (id)` column from the notebook's tables; for a clause buyout on a rival, use their `team_id` directly.
+The `to` field is the `user_id` of the player's current owner (matches the `team_id` you see in the standings). For a market player use `client.find_market_seller(player_id)` or the `Seller (id)` column from the notebook's tables; for a clause buyout on a rival, use their `team_id` directly.
 
 The offer type (`offer_type="purchase"` by default) is confirmed for market bids by several unofficial Biwenger clients, but is **not** confirmed for clause buyouts on a rival — before confirming a clause buyout for the first time, compare the dry-run payload against the real request you see in your browser's DevTools when doing it from biwenger.com.
 

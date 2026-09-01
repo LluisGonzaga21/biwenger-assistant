@@ -52,25 +52,25 @@ OWN_TEAM_ID = os.getenv("BIWENGER_OWN_TEAM_ID") or None  # manual override if au
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 COLUMNAS_RATIO = [
-    "Ratio pts/VM (actual)", "Ratio pts/VM (anterior)",
-    "Ratio pts totales/clausula (actual)", "Ratio pts totales/clausula (anterior)",
-    "Ratio pts medios/clausula (actual)", "Ratio pts medios/clausula (anterior)",
+    "Ratio pts/MV (current)", "Ratio pts/MV (previous)",
+    "Ratio total pts/clause (current)", "Ratio total pts/clause (previous)",
+    "Ratio avg pts/clause (current)", "Ratio avg pts/clause (previous)",
 ]
 
 
 def format_sheet(writer, df: pd.DataFrame, nombre_hoja: str, columnas_ratio: list):
     if df.empty:
-        df = pd.DataFrame({"Sin datos": []})
-    elif "Jugador" in df.columns:
-        # make 'Jugador' the first column, so it can be frozen and the
+        df = pd.DataFrame({"No data": []})
+    elif "Player" in df.columns:
+        # make 'Player' the first column, so it can be frozen and the
         # name stays visible even when scrolling right
-        resto = [c for c in df.columns if c != "Jugador"]
-        df = df[["Jugador"] + resto]
+        resto = [c for c in df.columns if c != "Player"]
+        df = df[["Player"] + resto]
 
     df.to_excel(writer, sheet_name=nombre_hoja, index=False)
     ws = writer.sheets[nombre_hoja]
 
-    # freeze the header row and the 'Jugador' column (column A) at the same time
+    # freeze the header row and the 'Player' column (column A) at the same time
     ws.freeze_panes = "B2"
     ws.auto_filter.ref = ws.dimensions
 
@@ -113,16 +113,16 @@ def main():
 
     df = build_dataframe(data)
 
-    df_mercado = df[df["Origen"] == "Mercado"]
-    df_rivales = df[df["Origen"].str.startswith("Rival:")]
-    df_mias = df[df["Origen"] == "Mi equipo"]
+    df_mercado = df[df["Source"] == "Market"]
+    df_rivales = df[df["Source"].str.startswith("Rival:")]
+    df_mias = df[df["Source"] == "My team"]
 
-    if not df_mercado.empty and "Ratio pts/VM (actual)" in df_mercado:
-        df_mercado = df_mercado.sort_values("Ratio pts/VM (actual)", ascending=False)
-    if not df_rivales.empty and "Ratio pts/VM (actual)" in df_rivales:
-        df_rivales = df_rivales.sort_values("Ratio pts/VM (actual)", ascending=False)
-    if not df_mias.empty and "Ratio pts/VM (actual)" in df_mias:
-        df_mias = df_mias.sort_values("Ratio pts/VM (actual)", ascending=False)
+    if not df_mercado.empty and "Ratio pts/MV (current)" in df_mercado:
+        df_mercado = df_mercado.sort_values("Ratio pts/MV (current)", ascending=False)
+    if not df_rivales.empty and "Ratio pts/MV (current)" in df_rivales:
+        df_rivales = df_rivales.sort_values("Ratio pts/MV (current)", ascending=False)
+    if not df_mias.empty and "Ratio pts/MV (current)" in df_mias:
+        df_mias = df_mias.sort_values("Ratio pts/MV (current)", ascending=False)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     fecha = datetime.now().strftime("%Y%m%d_%H%M")
@@ -130,9 +130,9 @@ def main():
 
     print(f"Generating Excel at {out_path}...")
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        format_sheet(writer, df_mercado, "Mercado", COLUMNAS_RATIO)
-        format_sheet(writer, df_rivales, "Rivales", COLUMNAS_RATIO)
-        format_sheet(writer, df_mias, "Mi equipo", COLUMNAS_RATIO)
+        format_sheet(writer, df_mercado, "Market", COLUMNAS_RATIO)
+        format_sheet(writer, df_rivales, "Rivals", COLUMNAS_RATIO)
+        format_sheet(writer, df_mias, "My team", COLUMNAS_RATIO)
 
     print(f"\nDone -> {out_path}")
 
