@@ -1,19 +1,19 @@
 """
-Funciones compartidas para cargar y analizar datos de Biwenger (mercado,
-plantillas rivales, tu plantilla, ratios puntos/valor, forma reciente y
-sugerencia de fichajes).
+Shared functions for loading and analyzing Biwenger data (market, rival
+rosters, your roster, points/value ratios, recent form, and signing
+suggestions).
 
-Las usan tanto 02_generar_excel.py como el notebook de analisis
-(03_analisis.ipynb) para no duplicar la logica. Si tocas algo aqui, afecta
-a los dos.
+Used by both 02_generar_excel.py and the analysis notebook
+(03_analisis.ipynb) to avoid duplicating logic. If you change something
+here, it affects both.
 
-IMPORTANTE sobre 'score_id': Biwenger calcula los puntos de cada jugador en
-paralelo con varios sistemas de puntuacion distintos (1, 2, 3...). Tanto
-'seasons[].points' como 'reports[].points' son diccionarios {scoreID: pts},
-NO un numero suelto. Hay que usar el scoreID de TU liga (league['scoreID'],
-visible en output/debug/league.json) para leer el que realmente cuenta en
-tu clasificacion. Todas las funciones de aqui que leen puntos piden
-score_id explicitamente por eso.
+IMPORTANT about 'score_id': Biwenger computes each player's points in
+parallel under several different scoring systems (1, 2, 3...). Both
+'seasons[].points' and 'reports[].points' are dicts {scoreID: pts}, NOT a
+plain number. You need to use YOUR league's scoreID (league['scoreID'],
+visible in output/debug/league.json) to read the one that actually counts
+toward your standings. That's why every function here that reads points
+takes score_id explicitly.
 """
 
 from __future__ import annotations
@@ -42,19 +42,19 @@ _CACHE_FILES = {
 
 POSICIONES = {1: "Portero", 2: "Defensa", 3: "Centrocampista", 4: "Delantero"}
 
-# Valores de 'status' del jugador que significan que no esta disponible para
-# jugar. Confirmados con datos reales de la API: "ok", "doubt", "injured",
-# "sanctioned", "discarded". "doubt" (duda de ultima hora) se deja FUERA a
-# proposito -- suele significar que podria jugar, no que seguro no juega, asi
-# que no se excluye automaticamente de los recomendadores (se ve igualmente
-# en la columna 'Estado' para que decidas tu). Si ves otro valor nuevo en
-# output/cache/detalles.json, anadelo aqui.
+# Player 'status' values that mean they are not available to play. Confirmed
+# with real API data: "ok", "doubt", "injured", "sanctioned", "discarded".
+# "doubt" (last-minute doubt) is deliberately left OUT -- it usually means
+# they might play, not that they definitely won't, so it is not
+# automatically excluded from the recommenders (it's still shown in the
+# 'Estado' column so you can decide for yourself). If you see another new
+# value in output/cache/detalles.json, add it here.
 ESTADOS_NO_DISPONIBLE = {"injured", "sanctioned", "discarded"}
 
 # ---------------------------------------------------------------------------
-# Nombres de campo candidatos por concepto. Si algo sale vacio en el
-# analisis, este es el primer sitio a mirar/editar tras revisar
-# output/debug/*.json (ejecuta 01_explorar_api.py para generarlos).
+# Candidate field names per concept. If something comes out empty in the
+# analysis, this is the first place to check/edit after reviewing
+# output/debug/*.json (run 01_explorar_api.py to generate them).
 # ---------------------------------------------------------------------------
 CAMPOS_CANDIDATOS = {
     "market_list": ["sales", "players", "items", "data"],
@@ -84,15 +84,15 @@ def _dig(d, path):
     return cur
 
 
-def puntos_por_score(points_dict, score_id):
-    """Extrae el numero de puntos para tu score_id de un dict {scoreID: pts}."""
+def points_by_score(points_dict, score_id):
+    """Extracts the points value for your score_id from a dict {scoreID: pts}."""
     if not isinstance(points_dict, dict):
         return None
     return points_dict.get(str(score_id))
 
 
-def puntos_por_partido(puntos, partidos):
-    """Puntos por partido jugado. None si no hay partidos o puntos."""
+def points_per_match(puntos, partidos):
+    """Points per match played. None if there are no matches or points."""
     if puntos is None or not partidos:
         return None
     try:
@@ -101,11 +101,11 @@ def puntos_por_partido(puntos, partidos):
         return None
 
 
-def _temporadas_liga_recientes(seasons, n=2):
+def _recent_league_seasons(seasons, n=2):
     """
-    De una lista 'seasons' (tal cual la da la API), devuelve como mucho las
-    `n` mas recientes DE LIGA (excluye copa/champions, que aparecen como
-    entradas con 'competition'), ordenadas de mas reciente a mas antigua.
+    From a 'seasons' list (as given by the API), returns at most the `n`
+    most recent LEAGUE ones (excludes cup/champions, which appear as
+    entries with 'competition'), ordered from most recent to oldest.
     """
     if not seasons or not isinstance(seasons, list):
         return []
@@ -120,38 +120,37 @@ def _temporadas_liga_recientes(seasons, n=2):
     return sorted(ligas, key=sort_key, reverse=True)[:n]
 
 
-def recortar_temporadas_antiguas(detalle):
+def trim_old_seasons(detalle):
     """
-    Recorta 'seasons' del detalle de un jugador a solo la temporada actual
-    y la anterior de LIGA -- es lo unico que usa el analisis (ver
-    extract_seasons_points); todo lo mas antiguo, y las copas/champions, se
-    descartan. Se aplica antes de guardar en cache para no arrastrar el
-    historico completo sin necesidad. Devuelve un detalle nuevo (no muta el
+    Trims 'seasons' in a player's detail down to just the current and
+    previous LEAGUE seasons -- that's all the analysis uses (see
+    extract_seasons_points); anything older, plus cup/champions, is
+    discarded. Applied before saving to cache so the full history isn't
+    carried around unnecessarily. Returns a new detail (does not mutate the
     original).
     """
     seasons = detalle.get("seasons") if isinstance(detalle, dict) else None
     if not isinstance(seasons, list):
         return detalle
     nuevo = dict(detalle)
-    nuevo["seasons"] = _temporadas_liga_recientes(seasons, n=2)
+    nuevo["seasons"] = _recent_league_seasons(seasons, n=2)
     return nuevo
 
 
-def temporada_liga_mas_comun(detalles: dict):
+def most_common_league_season(detalles: dict):
     """
-    Id de la temporada de LIGA 'actual' de verdad, deducido por MAYORIA:
-    la temporada mas reciente que tiene registrada cada jugador, la mas
-    repetida entre todos. En una liga activa la mayoria de los ~200
-    jugadores habran jugado esta temporada, asi que su moda es una
-    referencia fiable de cual es "ahora" -- mejor que fiarse ciegamente de
-    la temporada mas reciente de CADA jugador por separado, que para
-    alguien que lleva tiempo sin jugar (lesion larga, sin equipo, etc.)
-    puede ser de hace 2+ temporadas.
+    Id of the truly 'current' LEAGUE season, inferred by MAJORITY VOTE: the
+    most recent season each player has on record, the one most repeated
+    across all of them. In an active league, most of the ~200 players will
+    have played this season, so their mode is a reliable reference for
+    what "now" is -- better than blindly trusting the most recent season of
+    EACH player individually, which for someone who hasn't played in a
+    while (long injury, no team, etc.) can be from 2+ seasons ago.
     """
     from collections import Counter
     ids = []
     for detalle in detalles.values():
-        recientes = _temporadas_liga_recientes(
+        recientes = _recent_league_seasons(
             detalle.get("seasons") if isinstance(detalle, dict) else None, n=1
         )
         if recientes:
@@ -163,20 +162,20 @@ def temporada_liga_mas_comun(detalles: dict):
 
 def extract_seasons_points(detalle, score_id, temporada_actual_id=None, temporada_anterior_id=None):
     """
-    Busca en 'seasons' la temporada actual y la anterior DE LIGA (excluye
-    copa/champions, que aparecen como entradas con 'competition') y devuelve:
+    Looks in 'seasons' for the current and previous LEAGUE season (excludes
+    cup/champions, which appear as entries with 'competition') and returns:
     (pts_actual, partidos_actual, pts_anterior, partidos_anterior,
     etiqueta_actual, etiqueta_anterior).
 
-    Si se pasan temporada_actual_id / temporada_anterior_id (ver
-    temporada_liga_mas_comun), exige que la temporada de liga tenga
-    exactamente ese id para contar como "actual"/"anterior". Sin esto, a un
-    jugador que lleva tiempo sin jugar (su historial mas reciente es de
-    hace 2+ temporadas, p.ej. lesion larga o sin equipo) se le atribuirian
-    esos puntos viejos como si fueran de esta temporada o la pasada -- eso
-    desvirtuaria por completo su Puntuacion potencial. Sin esos parametros,
-    usa sin mas las 2 temporadas de liga mas recientes del jugador
-    (comportamiento antiguo, menos fiable para casos asi).
+    If temporada_actual_id / temporada_anterior_id are passed (see
+    most_common_league_season), it requires the league season to have
+    exactly that id to count as "current"/"previous". Without this, a
+    player who hasn't played in a while (their most recent record is from
+    2+ seasons ago, e.g. a long injury or no team) would have those old
+    points attributed to them as if they were from this season or the last
+    one -- that would completely distort their Puntuacion potencial.
+    Without these parameters, it simply uses the player's 2 most recent
+    league seasons (old behavior, less reliable for cases like that).
     """
     seasons = detalle.get("seasons") if isinstance(detalle, dict) else None
 
@@ -189,7 +188,7 @@ def extract_seasons_points(detalle, score_id, temporada_actual_id=None, temporad
         actual = por_id.get(str(temporada_actual_id))
         anterior = por_id.get(str(temporada_anterior_id)) if temporada_anterior_id is not None else None
     else:
-        ordered = _temporadas_liga_recientes(seasons)
+        ordered = _recent_league_seasons(seasons)
         actual = ordered[0] if len(ordered) > 0 else None
         anterior = ordered[1] if len(ordered) > 1 else None
 
@@ -197,24 +196,24 @@ def extract_seasons_points(detalle, score_id, temporada_actual_id=None, temporad
         return None, None, None, None, None, None
 
     return (
-        puntos_por_score(actual.get("points"), score_id) if actual else None,
+        points_by_score(actual.get("points"), score_id) if actual else None,
         actual.get("games") if actual else None,
-        puntos_por_score(anterior.get("points"), score_id) if anterior else None,
+        points_by_score(anterior.get("points"), score_id) if anterior else None,
         anterior.get("games") if anterior else None,
         label(actual),
         label(anterior),
     )
 
 
-def calcular_forma(detalle, score_id, decay=0.85, n_partidos=6):
+def calculate_form(detalle, score_id, decay=0.85, n_partidos=6):
     """
-    Media ponderada de los puntos de los ultimos partidos jugados esta
-    temporada, dando mas peso a los mas recientes (a partir de
-    'reports', que trae un resultado por partido con fecha).
+    Weighted average of the points from the last matches played this
+    season, giving more weight to the most recent ones (based on
+    'reports', which provides one result per match with a date).
 
-    decay (0-1): cuanto mas bajo, mas se prioriza el ultimo partido frente
-    a los de hace unas jornadas. n_partidos: cuantos partidos recientes
-    entran en la media.
+    decay (0-1): the lower it is, the more the last match is prioritized
+    over ones from a few matchdays back. n_partidos: how many recent
+    matches go into the average.
     """
     reports = detalle.get("reports") if isinstance(detalle, dict) else None
     if not isinstance(reports, list) or not reports:
@@ -224,7 +223,7 @@ def calcular_forma(detalle, score_id, decay=0.85, n_partidos=6):
     for r in reports:
         if not isinstance(r, dict):
             continue
-        pts = puntos_por_score(r.get("points"), score_id)
+        pts = points_by_score(r.get("points"), score_id)
         fecha = _dig(r, ["match", "date"])
         if pts is None or fecha is None:
             continue
@@ -232,28 +231,28 @@ def calcular_forma(detalle, score_id, decay=0.85, n_partidos=6):
     if not partidos:
         return None
 
-    partidos.sort(key=lambda t: t[0])  # mas antiguo -> mas reciente
+    partidos.sort(key=lambda t: t[0])  # oldest -> most recent
     partidos = partidos[-n_partidos:]
 
-    pesos = [decay ** i for i in range(len(partidos) - 1, -1, -1)]  # ultimo partido -> peso maximo
+    pesos = [decay ** i for i in range(len(partidos) - 1, -1, -1)]  # last match -> maximum weight
     total_peso = sum(pesos)
     return round(sum(p * w for (_, p), w in zip(partidos, pesos)) / total_peso, 2)
 
 
-def puntuacion_potencial(detalle, score_id, decay=0.85, n_partidos=6, peso_temporada_anterior=0.3,
+def potential_score(detalle, score_id, decay=0.85, n_partidos=6, peso_temporada_anterior=0.3,
                           temporada_actual_id=None, temporada_anterior_id=None):
     """
-    Metrica de rendimiento "potencial" pensada para comparar candidatos a
-    fichaje: mezcla la forma reciente (partidos de esta temporada, mas peso
-    a los ultimos) con los puntos/partido de la temporada anterior de LaLiga
-    (con menos peso, y solo si jugo en primera). Si falta alguno de los dos
-    componentes, usa solo el que haya disponible.
+    "Potential" performance metric designed to compare signing candidates:
+    it blends recent form (matches from this season, weighting the latest
+    ones more) with points/match from the previous LaLiga season (weighted
+    less, and only if they played in the top division). If either
+    component is missing, it just uses whichever one is available.
     """
-    forma = calcular_forma(detalle, score_id, decay=decay, n_partidos=n_partidos)
+    forma = calculate_form(detalle, score_id, decay=decay, n_partidos=n_partidos)
     _, _, pts_anterior, partidos_anterior, _, _ = extract_seasons_points(
         detalle, score_id, temporada_actual_id, temporada_anterior_id
     )
-    ppg_anterior = puntos_por_partido(pts_anterior, partidos_anterior)
+    ppg_anterior = points_per_match(pts_anterior, partidos_anterior)
 
     if forma is None and ppg_anterior is None:
         return None
@@ -264,22 +263,22 @@ def puntuacion_potencial(detalle, score_id, decay=0.85, n_partidos=6, peso_tempo
     return round(forma * (1 - peso_temporada_anterior) + ppg_anterior * peso_temporada_anterior, 2)
 
 
-def esta_disponible(detalle):
-    """False si el 'status' del jugador esta en ESTADOS_NO_DISPONIBLE (lesion,
-    sancion...). True si esta 'ok' o si no hay status (mejor no descartar
-    por error)."""
+def is_available(detalle):
+    """False if the player's 'status' is in ESTADOS_NO_DISPONIBLE (injury,
+    suspension...). True if it's 'ok' or if there's no status (better not
+    to exclude by mistake)."""
     estado = detalle.get("status") if isinstance(detalle, dict) else None
     if not estado:
         return True
     return str(estado).lower() not in ESTADOS_NO_DISPONIBLE
 
 
-def dificultad_proximo_partido(detalle):
+def next_match_difficulty(detalle):
     """
-    Info del proximo partido de LaLiga del jugador a partir de
-    'team.nextGames[0]': rival, si juega en casa, la jornada, y una
-    dificultad (0-100, mas alto = mas dificil para su equipo). None si no
-    hay proximo partido programado.
+    Info about the player's next LaLiga match based on 'team.nextGames[0]':
+    opponent, whether it's home, the matchday, and a difficulty rating
+    (0-100, higher = harder for their team). None if there is no upcoming
+    match scheduled.
     """
     team = detalle.get("team") if isinstance(detalle, dict) else None
     next_games = team.get("nextGames") if isinstance(team, dict) else None
@@ -299,12 +298,11 @@ def dificultad_proximo_partido(detalle):
     }
 
 
-def tendencia_precio(detalle, dias=7):
+def price_trend(detalle, dias=7):
     """
-    % de variacion del valor de mercado en los ultimos `dias` puntos del
-    historico diario de precios ('prices': lista [fecha, precio]
-    cronologica). Positivo = subiendo, negativo = bajando. None si no hay
-    historico suficiente.
+    % change in market value over the last `dias` points of the daily price
+    history ('prices': chronological list of [date, price]). Positive =
+    rising, negative = falling. None if there isn't enough history.
     """
     precios = detalle.get("prices") if isinstance(detalle, dict) else None
     if not isinstance(precios, list) or len(precios) < 2:
@@ -319,19 +317,19 @@ def tendencia_precio(detalle, dias=7):
     return round((fin - inicio) / inicio * 100, 1)
 
 
-PARTIDOS_TEMPORADA_COMPLETA = 38  # jornadas de una liga de 20 equipos (ida y vuelta)
-VALOR_MINIMO_RELEVANTE = 400_000  # por debajo de esto, se considera "morralla"
+PARTIDOS_TEMPORADA_COMPLETA = 38  # matchdays in a 20-team league (home and away)
+VALOR_MINIMO_RELEVANTE = 400_000  # below this, considered "clutter"
 
 
-def jugador_irrelevante(detalle, score_id, temporada_actual_id=None, temporada_anterior_id=None):
+def is_irrelevant_player(detalle, score_id, temporada_actual_id=None, temporada_anterior_id=None):
     """
-    True si el jugador no aporta nada util al analisis de mercado/rivales:
-    - valor de mercado desconocido o <= VALOR_MINIMO_RELEVANTE ("morralla"), o
-    - no esta inscrito con ningun equipo de 1a division ('team' vacio en la
-      API -- ver el caso de Owono), o
-    - no ha debutado esta temporada (sin 'Puntos temporada actual') Y jugo
-      menos de la mitad de los partidos la temporada anterior (jugador
-      practicamente inactivo o fuera del primer equipo).
+    True if the player adds nothing useful to the market/rivals analysis:
+    - unknown market value or <= VALOR_MINIMO_RELEVANTE ("clutter"), or
+    - not registered with any top-division team ('team' empty in the API --
+      see the Owono case), or
+    - hasn't debuted this season (no 'Puntos temporada actual') AND played
+      less than half the matches last season (essentially inactive player
+      or out of the first team).
     """
     valor = first_present(detalle, CAMPOS_CANDIDATOS["player_price"])
     if valor is None or valor <= VALOR_MINIMO_RELEVANTE:
@@ -345,12 +343,12 @@ def jugador_irrelevante(detalle, score_id, temporada_actual_id=None, temporada_a
         detalle, score_id, temporada_actual_id, temporada_anterior_id
     )
     if pts_actual is not None:
-        return False  # ha debutado esta temporada
+        return False  # has debuted this season
     return (partidos_anterior or 0) < (PARTIDOS_TEMPORADA_COMPLETA / 2)
 
 
 def ratio(points, value):
-    """Puntos por millon de valor (de mercado o de clausula). None si no se puede calcular."""
+    """Points per million of value (market value or buyout clause). None if it can't be computed."""
     if points is None or not value:
         return None
     try:
@@ -359,7 +357,7 @@ def ratio(points, value):
         return None
 
 
-def construir_fila_jugador(pid, detalle, score_id, extra=None,
+def build_player_row(pid, detalle, score_id, extra=None,
                             temporada_actual_id=None, temporada_anterior_id=None):
     extra = extra or {}
     nombre = first_present(detalle, ["name"], f"id:{pid}")
@@ -371,7 +369,7 @@ def construir_fila_jugador(pid, detalle, score_id, extra=None,
     pts_actual, partidos_actual, pts_anterior, partidos_anterior, etq_actual, etq_anterior = (
         extract_seasons_points(detalle, score_id, temporada_actual_id, temporada_anterior_id)
     )
-    proximo = dificultad_proximo_partido(detalle) or {}
+    proximo = next_match_difficulty(detalle) or {}
 
     fila = {
         "player_id": pid,
@@ -379,27 +377,27 @@ def construir_fila_jugador(pid, detalle, score_id, extra=None,
         "Posicion": posicion,
         "Equipo LaLiga": equipo,
         "Estado": first_present(detalle, ["status"], "ok"),
-        "Disponible": esta_disponible(detalle),
+        "Disponible": is_available(detalle),
         "Valor de mercado": valor_actual,
-        "Tendencia precio (7d) %": tendencia_precio(detalle),
-        # nombres de columna FIJOS a proposito (no el nombre literal de la
-        # temporada, p.ej. "Temporada 2025/2026") -- si no, jugadores sin
-        # temporada anterior (debutantes, fichajes de fuera) generan
-        # columnas distintas ("Puntos temp. anterior") y el df se llena de
-        # columnas casi-duplicadas. 'Temporada actual/anterior' llevan la
-        # etiqueta real si hace falta consultarla.
+        "Tendencia precio (7d) %": price_trend(detalle),
+        # column names are FIXED on purpose (not the literal season name,
+        # e.g. "Temporada 2025/2026") -- otherwise players without a
+        # previous season (debutants, signings from abroad) would generate
+        # different columns ("Puntos temp. anterior") and the df would fill
+        # up with near-duplicate columns. 'Temporada actual/anterior' carry
+        # the real label if you ever need to check it.
         "Temporada actual": etq_actual,
         "Puntos temporada actual": pts_actual,
         "Partidos temporada actual": partidos_actual,
-        "Pts/partido (actual)": puntos_por_partido(pts_actual, partidos_actual),
+        "Pts/partido (actual)": points_per_match(pts_actual, partidos_actual),
         "Ratio pts/VM (actual)": ratio(pts_actual, valor_actual),
         "Temporada anterior": etq_anterior,
         "Puntos temporada anterior": pts_anterior,
         "Partidos temporada anterior": partidos_anterior,
-        "Pts/partido (anterior)": puntos_por_partido(pts_anterior, partidos_anterior),
+        "Pts/partido (anterior)": points_per_match(pts_anterior, partidos_anterior),
         "Ratio pts/VM (anterior)": ratio(pts_anterior, valor_actual),
-        "Forma (ult. partidos)": calcular_forma(detalle, score_id),
-        "Puntuacion potencial": puntuacion_potencial(
+        "Forma (ult. partidos)": calculate_form(detalle, score_id),
+        "Puntuacion potencial": potential_score(
             detalle, score_id, temporada_actual_id=temporada_actual_id, temporada_anterior_id=temporada_anterior_id
         ),
         "Proximo rival": proximo.get("rival"),
@@ -411,43 +409,45 @@ def construir_fila_jugador(pid, detalle, score_id, extra=None,
     return fila
 
 
-def sugerir_fichajes(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True, ordenar_por="mejora"):
+def suggest_signings(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True, ordenar_por="mejora"):
     """
-    Sugiere fichajes (clausula a un rival o compra en el mercado) que
-    mejorarian tu equipo, comparando 1 a 1: cada candidato asequible contra
-    tu jugador mas flojo (por 'Puntuacion potencial') de su misma posicion.
+    Suggests signings (a buyout clause on a rival's player, or a market
+    purchase) that would improve your team, comparing 1 to 1: each
+    affordable candidate against your weakest player (by 'Puntuacion
+    potencial') in the same position.
 
-    df: el DataFrame combinado de construir_dataframe() (necesita las
-    columnas 'Origen', 'Posicion', 'Puntuacion potencial' y, para el coste,
-    'Precio en mercado' y/o 'Clausula').
-    balance: tu saldo disponible (importe maximo a gastar).
-    solo_disponibles: si True (por defecto), descarta candidatos lesionados
-    o sancionados ('Disponible' == False).
-    ordenar_por: 'mejora' (por defecto, mejora absoluta en pts/partido) o
-    'eficiencia' (mejora por millon gastado -- prioriza fichajes baratos que
-    mejoran poco a poco frente a fichajes carisimos que mejoran mucho).
+    df: the combined DataFrame from build_dataframe() (needs the
+    columns 'Origen', 'Posicion', 'Puntuacion potencial' and, for the cost,
+    'Precio en mercado' and/or 'Clausula').
+    balance: your available balance (maximum amount to spend).
+    solo_disponibles: if True (default), discards injured or suspended
+    candidates ('Disponible' == False).
+    ordenar_por: 'mejora' (default, absolute improvement in pts/match) or
+    'eficiencia' (improvement per million spent -- prioritizes cheap
+    signings that improve you a little over very expensive signings that
+    improve you a lot).
 
-    Descarta siempre las clausulas de rival que esten bloqueadas ahora
-    mismo (tras una compra/clausulazo reciente, la API la rechazaria) --
-    ver 'Clausula bloqueada hasta' en el df.
+    Always discards rival buyout clauses that are currently locked (after a
+    recent purchase/clause buyout, the API would reject it) -- see
+    'Clausula bloqueada hasta' in the df.
     """
     requeridas = {"Origen", "Posicion", "Puntuacion potencial"}
     faltan = requeridas - set(df.columns)
     if faltan:
-        raise ValueError(f"Al DataFrame le faltan columnas: {faltan}")
+        raise ValueError(f"The DataFrame is missing columns: {faltan}")
     if ordenar_por not in ("mejora", "eficiencia"):
-        raise ValueError("ordenar_por debe ser 'mejora' o 'eficiencia'")
+        raise ValueError("ordenar_por must be 'mejora' or 'eficiencia'")
 
     mi_equipo = df[(df["Origen"] == "Mi equipo") & df["Puntuacion potencial"].notna()]
     if mi_equipo.empty:
-        raise ValueError("No hay jugadores de 'Mi equipo' con Puntuacion potencial calculable.")
+        raise ValueError("There are no 'Mi equipo' players with a computable Puntuacion potencial.")
 
     mi_equipo_ordenado = mi_equipo.sort_values("Puntuacion potencial")
     listones = mi_equipo_ordenado.groupby("Posicion")["Puntuacion potencial"].min()
     peor_jugador = mi_equipo_ordenado.groupby("Posicion")["Jugador"].first()
-    # cuantos de tus jugadores en cada posicion rinden por debajo de tu
-    # propia mediana ahi -- mas de uno indica una posicion con mas de un
-    # eslabon debil, no solo el peor
+    # how many of your players in each position perform below your own
+    # median there -- more than one indicates a position with more than one
+    # weak link, not just the worst one
     medianas_propias = mi_equipo.groupby("Posicion")["Puntuacion potencial"].median()
     total_propios = mi_equipo.groupby("Posicion")["Jugador"].count()
     flojos_propios = (
@@ -459,8 +459,8 @@ def sugerir_fichajes(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True,
     if solo_disponibles and "Disponible" in candidatos.columns:
         candidatos = candidatos[candidatos["Disponible"]]
     if "Clausula disponible ahora" in candidatos.columns:
-        # las filas de Mercado no tienen esta columna (NaN) -- se dejan pasar,
-        # solo se descartan clausulas de rival EXPLICITAMENTE bloqueadas ahora
+        # Mercado rows don't have this column (NaN) -- they're let through,
+        # only rival clauses EXPLICITLY locked right now are discarded
         candidatos = candidatos[candidatos["Clausula disponible ahora"] != False]  # noqa: E712
     coste_mercado = candidatos["Precio en mercado"] if "Precio en mercado" in candidatos else None
     coste_clausula = candidatos["Clausula"] if "Clausula" in candidatos else None
@@ -505,20 +505,20 @@ def sugerir_fichajes(df: pd.DataFrame, balance, top_n=15, solo_disponibles=True,
     )
 
 
-def unico_por_jugador(df: pd.DataFrame) -> pd.DataFrame:
+def unique_by_player(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Un jugador puede aparecer en mas de una fila de construir_dataframe: una
-    por estar en la plantilla de un equipo, otra por estar ademas puesto a
-    la venta en el mercado por su propio manager (ver la nota en la
-    seccion 2 del notebook). Eso es correcto para tablas de compra/venta
-    (Mercado vs Rival tienen coste distinto -- precio de mercado vs
-    clausula), pero en un RANKING hace que el mismo jugador ocupe varios
-    puestos en vez de dejar sitio a otros.
+    A player can appear in more than one row from build_dataframe: one
+    for being on a team's roster, another for also being listed for sale on
+    the market by their own manager (see the note in section 2 of the
+    notebook). That's correct for buy/sell tables (Mercado vs Rival have
+    different costs -- market price vs buyout clause), but in a RANKING it
+    makes the same player take up several spots instead of leaving room for
+    others.
 
-    Esta funcion colapsa esas filas a una por jugador, combinando los
-    'Origen' distintos en un solo texto (p.ej. 'Mercado + Rival: Botas FC').
-    Usala antes de un top-N cuando no te interesa distinguir por donde se
-    consigue, solo el ranking de rendimiento.
+    This function collapses those rows into one per player, combining the
+    different 'Origen' values into a single text (e.g. 'Mercado + Rival:
+    Botas FC'). Use it before a top-N when you don't care where they can be
+    obtained from, only the performance ranking.
     """
     if df.empty or "player_id" not in df.columns:
         return df
@@ -530,20 +530,20 @@ def unico_por_jugador(df: pd.DataFrame) -> pd.DataFrame:
     return combinado[df.columns.tolist()]
 
 
-def coste_por_punto(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20) -> pd.DataFrame:
+def cost_per_point(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20) -> pd.DataFrame:
     """
-    Para cada jugador (cualquier posicion/origen), cuanto cuesta (Valor de
-    mercado) por cada punto de rendimiento (`metrica`) que genera, y como
-    se compara contra la MEDIANA de TODO EL JUEGO -- todos los jugadores
-    validos de tu dataset, sin distinguir posicion (a diferencia de
-    calcular_ratio_referencia/estimar_valor_justo, que si separan por
-    posicion). Mas bajo = mas barato por punto = mejor.
+    For each player (any position/origin), how much it costs (Valor de
+    mercado) per point of performance (`metrica`) they generate, and how
+    that compares against the MEDIAN of THE WHOLE GAME -- all valid players
+    in your dataset, without distinguishing by position (unlike
+    calculate_reference_ratio/estimate_fair_value, which do split by
+    position). Lower = cheaper per point = better.
 
-    Usa unico_por_jugador() primero si quieres un ranking sin duplicados
-    por jugadores que estan a la vez en mercado y en una plantilla.
+    Use unique_by_player() first if you want a ranking without duplicates
+    for players who are both on the market and on a roster.
 
-    Se excluyen jugadores con metrica <= 0 (un coste por punto negativo o
-    infinito no tiene sentido) o sin valor de mercado.
+    Players with metrica <= 0 (a negative or infinite cost per point makes
+    no sense) or without a market value are excluded.
     """
     validos = df[df[metrica].notna() & (df[metrica] > 0) & df["Valor de mercado"].notna() & (df["Valor de mercado"] > 0)].copy()
     validos["Coste por punto"] = (validos["Valor de mercado"] / validos[metrica]).round(0)
@@ -552,14 +552,14 @@ def coste_por_punto(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct
     validos["Media del juego (referencia)"] = media_juego
     validos["% vs media del juego"] = ((validos["Coste por punto"] - media_juego) / media_juego * 100).round(1)
 
-    def etiqueta(pct):
+    def label(pct):
         if pct <= -margen_pct:
             return "Muy por debajo (barato)"
         if pct >= margen_pct:
             return "Muy por encima (caro)"
         return "En la media"
 
-    validos["Valoracion"] = validos["% vs media del juego"].apply(etiqueta)
+    validos["Valoracion"] = validos["% vs media del juego"].apply(label)
 
     columnas = [c for c in [
         "player_id", "Jugador", "Posicion", "Origen", "Valor de mercado", metrica,
@@ -568,19 +568,20 @@ def coste_por_punto(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct
     return validos[columnas].sort_values("Coste por punto").reset_index(drop=True)
 
 
-def mejores_jugadores(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
+def best_players(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
                        metrica="Puntuacion potencial", solo_disponibles=True):
     """
-    Ranking general de jugadores por metrica de rendimiento (por defecto
-    'Puntuacion potencial'), sin mirar precio ni si te lo puedes permitir.
-    Sirve como watchlist: quien esta en mejor forma ahora mismo.
+    General player ranking by performance metric (default 'Puntuacion
+    potencial'), without looking at price or whether you can afford it.
+    Works as a watchlist: who's in the best form right now.
 
-    posicion: filtra por 'Portero'/'Defensa'/'Centrocampista'/'Delantero'.
-    origen: filtra por 'Mercado', 'Mi equipo', o el 'Origen' exacto de un
-    rival (p.ej. 'Rival: Botas FC'). Por defecto no filtra (incluye todos),
-    y en ese caso colapsa jugadores duplicados en varios origenes (ver
-    unico_por_jugador) para que no ocupen varios puestos del ranking.
-    solo_disponibles: si True (por defecto), descarta lesionados/sancionados.
+    posicion: filters by 'Portero'/'Defensa'/'Centrocampista'/'Delantero'.
+    origen: filters by 'Mercado', 'Mi equipo', or a rival's exact 'Origen'
+    (e.g. 'Rival: Botas FC'). By default it doesn't filter (includes all),
+    and in that case it collapses players duplicated across several
+    origins (see unique_by_player) so they don't take up several spots in
+    the ranking.
+    solo_disponibles: if True (default), discards injured/suspended players.
     """
     resultado = df.dropna(subset=[metrica])
     if solo_disponibles and "Disponible" in resultado.columns:
@@ -590,7 +591,7 @@ def mejores_jugadores(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
     if origen:
         resultado = resultado[resultado["Origen"] == origen]
     else:
-        resultado = unico_por_jugador(resultado)
+        resultado = unique_by_player(resultado)
 
     columnas = [c for c in [
         "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Origen",
@@ -606,12 +607,12 @@ def mejores_jugadores(df: pd.DataFrame, posicion=None, origen=None, top_n=20,
     )
 
 
-def calcular_ratio_referencia(df: pd.DataFrame, metrica="Puntuacion potencial"):
+def calculate_reference_ratio(df: pd.DataFrame, metrica="Puntuacion potencial"):
     """
-    Ratio de referencia (metrica / valor de mercado en millones) por
-    posicion, calculado con la MEDIANA de todos los jugadores validos
-    (mercado + rivales + tu equipo -> muestra amplia). Es la base para
-    estimar un valor de mercado "justo" a partir del rendimiento.
+    Reference ratio (metric / market value in millions) per position,
+    computed with the MEDIAN of all valid players (market + rivals + your
+    team -> broad sample). This is the basis for estimating a "fair"
+    market value from performance.
     """
     tmp = df.dropna(subset=[metrica, "Valor de mercado"])
     tmp = tmp[tmp["Valor de mercado"] > 0].copy()
@@ -619,22 +620,23 @@ def calcular_ratio_referencia(df: pd.DataFrame, metrica="Puntuacion potencial"):
     return tmp.groupby("Posicion")["_ratio"].median()
 
 
-def estimar_valor_justo(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True):
+def estimate_fair_value(df: pd.DataFrame, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True):
     """
-    Para los jugadores EN VENTA en el mercado, estima un "valor justo" a
-    partir de como el resto de jugadores de tu liga (de esa misma posicion)
-    relacionan su rendimiento con su valor de mercado (ver
-    calcular_ratio_referencia), y lo compara con el precio de venta actual
-    para detectar chollos/sobreprecios y sugerir una oferta.
+    For players FOR SALE on the market, estimates a "fair value" based on
+    how the rest of the players in your league (in that same position)
+    relate their performance to their market value (see
+    calculate_reference_ratio), and compares it with the current asking
+    price to spot bargains/overpriced players and suggest an offer.
 
-    Es una heuristica basada en jugadores similares de tu propia liga, NO
-    el precio "real" segun Biwenger -- usalo como orientacion, no como
-    verdad absoluta. margen_pct: a partir de que % de diferencia se
-    etiqueta como 'Chollo'/'Caro' (por debajo se considera 'Precio justo').
-    solo_disponibles: si True (por defecto), descarta lesionados/sancionados
-    (un chollo que no puede jugar no es tan chollo).
+    This is a heuristic based on similar players in your own league, NOT
+    the "real" price according to Biwenger -- use it as guidance, not
+    absolute truth. margen_pct: the % difference threshold above/below
+    which it's labeled 'Chollo'/'Caro' (below that it's considered 'Precio
+    justo').
+    solo_disponibles: if True (default), discards injured/suspended players
+    (a bargain that can't play isn't much of a bargain).
     """
-    ratios_ref = calcular_ratio_referencia(df, metrica=metrica)
+    ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
     mercado = df[df["Origen"] == "Mercado"].dropna(subset=[metrica, "Precio en mercado"]).copy()
     if solo_disponibles and "Disponible" in mercado.columns:
@@ -648,18 +650,18 @@ def estimar_valor_justo(df: pd.DataFrame, metrica="Puntuacion potencial", margen
     mercado["% sobre precio pedido"] = (
         mercado["Diferencia vs precio pedido"] / mercado["Precio en mercado"] * 100
     ).round(1)
-    # nunca tiene sentido ofrecer mas del precio pedido, ni mas de lo que
-    # consideramos su valor justo
+    # it never makes sense to offer more than the asking price, nor more
+    # than what we consider their fair value
     mercado["Oferta sugerida"] = mercado[["Valor justo estimado", "Precio en mercado"]].min(axis=1)
 
-    def etiqueta(pct):
+    def label(pct):
         if pct >= margen_pct:
             return "Chollo"
         if pct <= -margen_pct:
             return "Caro"
         return "Precio justo"
 
-    mercado["Valoracion"] = mercado["% sobre precio pedido"].apply(etiqueta)
+    mercado["Valoracion"] = mercado["% sobre precio pedido"].apply(label)
 
     columnas = [
         "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Precio en mercado",
@@ -673,42 +675,42 @@ def estimar_valor_justo(df: pd.DataFrame, metrica="Puntuacion potencial", margen
     )
 
 
-def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5,
+def suggest_market_offer(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct=5,
                             metrica="Puntuacion potencial", rango_comparables_pct=40):
     """
-    Para cada jugador LIBRE del mercado (Origen == 'Mercado'; para
-    clausulazos no aplica -- el importe es fijo, no se puja), estima
-    cuanto haria falta ofertar de verdad para llevartelo, no solo cuanto
-    "vale" segun tu propia heuristica.
+    For each FREE-AGENT player on the market (Origen == 'Mercado'; doesn't
+    apply to buyout clauses -- the amount there is fixed, not bid on),
+    estimates how much you'd actually need to bid to land them, not just
+    how much they're "worth" per your own heuristic.
 
-    Biwenger no permite pujar por debajo del precio pedido actual, asi que
-    ese precio es siempre el SUELO de la oferta recomendada. A partir de
-    ahi:
+    Biwenger doesn't allow bidding below the current asking price, so that
+    price is always the FLOOR of the recommended offer. From there:
 
-    1. Comparables reales: la MEDIANA de lo que los duenos actuales de
-       jugadores similares (misma posicion, valor de mercado dentro de
-       +/-rango_comparables_pct%) pagaron de verdad por ellos (precio de
-       compra real, no clausula). Si esa mediana supera el precio pedido,
-       es la mejor referencia de "lo que hace falta en la practica" -- se
-       usa como base en vez del precio pedido.
-    2. Competencia real: cuantos RIVALES tienen presupuesto (`maximumBid`
-       de standings -- ojo, puede ser mayor que su saldo actual, Biwenger
-       permite pujar en descubierto hasta ese limite) para superar esa
-       base. Si hay competencia, sube un poco mas (margen_sobre_pedido_pct)
-       para no perderlo por una diferencia pequenya.
+    1. Real comparables: the MEDIAN of what the current owners of similar
+       players (same position, market value within +/-rango_comparables_pct%)
+       actually paid for them (real purchase price, not the buyout clause).
+       If that median exceeds the asking price, it's the best reference for
+       "what it actually takes in practice" -- it's used as the base
+       instead of the asking price.
+    2. Real competition: how many RIVALS have the budget (`maximumBid` from
+       standings -- note this can be higher than their current balance,
+       Biwenger allows bidding into the red up to that limit) to beat that
+       base. If there's competition, it bumps it up a bit more
+       (margen_sobre_pedido_pct) so you don't lose them over a small
+       difference.
 
-    Tu valor justo estimado (misma heuristica que estimar_valor_justo) se
-    incluye solo como referencia informativa -- para que veas si lo que
-    hace falta pujar se sale de lo que tu crees que rinde el jugador -- pero
-    ya NO limita la oferta recomendada hacia abajo (un jugador puede exigir
-    pujar por encima de tu valor justo y aun asi ser la unica forma real de
-    ficharlo).
+    Your estimated fair value (same heuristic as estimate_fair_value) is
+    included only as an informative reference -- so you can see whether
+    what it takes to bid is out of line with what you think the player is
+    worth -- but it no longer caps the recommended offer from below (a
+    player may require bidding above your fair value and still be the only
+    real way to sign them).
 
-    Esto es una heuristica orientativa (no sabemos quien esta REALMENTE
-    interesado en cada jugador, solo quien podria permitirselo economicamente)
-    -- no una prediccion garantizada de lo que hara falta para ganarlo.
+    This is a guiding heuristic (we don't know who is REALLY interested in
+    each player, only who could afford them financially) -- not a
+    guaranteed prediction of what it will take to win them.
     """
-    ratios_ref = calcular_ratio_referencia(df, metrica=metrica)
+    ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
     mercado = df[df["Origen"] == "Mercado"].dropna(subset=[metrica, "Precio en mercado"]).copy()
     mercado["Ratio referencia posicion"] = mercado["Posicion"].map(ratios_ref)
@@ -717,7 +719,7 @@ def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct
         mercado[metrica] / mercado["Ratio referencia posicion"] * 1_000_000
     ).round(-3)
 
-    # precios de compra REALES (lo que pago cada dueno actual, no la clausula)
+    # REAL purchase prices (what each current owner actually paid, not the buyout clause)
     precios_reales = []
     for r in data["rosters_raw"].values():
         for f in r["filas"]:
@@ -727,7 +729,7 @@ def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct
     precios_reales = pd.DataFrame(precios_reales)
     comparables = df.merge(precios_reales, on="player_id", how="inner") if not precios_reales.empty else pd.DataFrame()
 
-    def precio_comparables(row):
+    def comparable_price(row):
         if comparables.empty:
             return None
         rango = row["Valor de mercado"] * rango_comparables_pct / 100
@@ -740,22 +742,22 @@ def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct
             return None
         return similares["precio_pagado"].median()
 
-    mercado["Precio pagado por comparables"] = mercado.apply(precio_comparables, axis=1)
+    mercado["Precio pagado por comparables"] = mercado.apply(comparable_price, axis=1)
 
-    # cuantos rivales (no tu) tienen presupuesto de sobra para superar el precio pedido
+    # how many rivals (not you) have enough budget spare to beat the asking price
     mi_team_id = data["mi_team_id"]
     max_bids_rivales = [
         s.get("maximumBid") for s in data["standings"]
         if str(s.get("id")) != str(mi_team_id) and s.get("maximumBid") is not None
     ]
 
-    def rivales_que_podrian_pujar_mas(precio_pedido):
+    def rivals_who_could_bid_more(precio_pedido):
         return sum(1 for mb in max_bids_rivales if mb > precio_pedido)
 
-    mercado["Rivales que podrian pujar mas"] = mercado["Precio en mercado"].apply(rivales_que_podrian_pujar_mas)
+    mercado["Rivales que podrian pujar mas"] = mercado["Precio en mercado"].apply(rivals_who_could_bid_more)
 
-    def oferta_recomendada(row):
-        # suelo: nunca por debajo del precio pedido -- Biwenger no deja pujar menos
+    def recommended_offer(row):
+        # floor: never below the asking price -- Biwenger won't allow a lower bid
         base = row["Precio en mercado"]
         comparable = row["Precio pagado por comparables"]
         if pd.notna(comparable) and comparable > base:
@@ -764,7 +766,7 @@ def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct
             base = base * (1 + margen_sobre_pedido_pct / 100)
         return round(base / 1000) * 1000
 
-    mercado["Oferta recomendada"] = mercado.apply(oferta_recomendada, axis=1)
+    mercado["Oferta recomendada"] = mercado.apply(recommended_offer, axis=1)
 
     columnas = [
         "player_id", "Jugador", "Posicion", "Equipo LaLiga", "Precio en mercado",
@@ -778,28 +780,28 @@ def sugerir_oferta_mercado(df: pd.DataFrame, data: dict, margen_sobre_pedido_pct
     )
 
 
-def sugerir_ventas(df: pd.DataFrame, data: dict = None, metrica="Puntuacion potencial", margen_pct=20):
+def suggest_sales(df: pd.DataFrame, data: dict = None, metrica="Puntuacion potencial", margen_pct=20):
     """
-    El complementario a estimar_valor_justo pero para TU plantilla: compara
-    el valor de mercado OFICIAL de cada jugador tuyo con lo que su
-    rendimiento actual justificaria (misma mediana de referencia por
-    posicion). Si el valor de mercado es mucho mayor que ese "valor justo",
-    el jugador esta sobrevalorado -- venderlo ahora aprovecha un precio que
-    probablemente no se sostenga si su rendimiento no mejora.
+    The counterpart to estimate_fair_value but for YOUR roster: compares
+    the OFFICIAL market value of each of your players with what their
+    current performance would justify (same reference median by position).
+    If the market value is much higher than that "fair value", the player
+    is overvalued -- selling now takes advantage of a price that probably
+    won't hold if their performance doesn't improve.
 
-    Si pasas `data` (lo que devuelve cargar_datos_liga), tambien cruza las
-    ofertas que has recibido de un manager IDENTIFICADO (ver
-    ofertas(solo_identificadas=True) -- descarta la venta rapida
-    automatica que Biwenger genera para cada jugador de tu plantilla, que
-    no es demanda real): una oferta real en la mano pesa mas que la
-    heuristica -- si alguien identificado ya ofrece igual o mas que el
-    valor justo estimado, se recomienda vender aunque el % de
-    sobrevaloracion por si solo no llegase al umbral.
+    If you pass `data` (what load_league_data returns), it also cross-
+    references the offers you've received from an IDENTIFIED manager (see
+    offers(solo_identificadas=True) -- discards the automatic quick-sale
+    offer Biwenger generates for every player on your roster, which isn't
+    real demand): a real offer in hand outweighs the heuristic -- if an
+    identified manager already offers at or above the estimated fair
+    value, selling is recommended even if the overvaluation % alone
+    wouldn't reach the threshold.
 
-    Igual que estimar_valor_justo, es una heuristica orientativa basada en
-    tu propia liga, no una prediccion garantizada.
+    Same as estimate_fair_value, this is a guiding heuristic based on your
+    own league, not a guaranteed prediction.
     """
-    ratios_ref = calcular_ratio_referencia(df, metrica=metrica)
+    ratios_ref = calculate_reference_ratio(df, metrica=metrica)
 
     mios = df[df["Origen"] == "Mi equipo"].dropna(subset=[metrica, "Valor de mercado"]).copy()
     mios["Ratio referencia posicion"] = mios["Posicion"].map(ratios_ref)
@@ -813,16 +815,16 @@ def sugerir_ventas(df: pd.DataFrame, data: dict = None, metrica="Puntuacion pote
     ).round(1)
 
     mios["Mejor oferta recibida"] = None
-    mios["Nº ofertas recibidas"] = 0
+    mios["Nº offers recibidas"] = 0
     if data is not None:
-        recibidas = ofertas(data, tipo="recibidas", solo_identificadas=True)
+        recibidas = offers(data, tipo="recibidas", solo_identificadas=True)
         if not recibidas.empty:
             mejor_oferta = recibidas.groupby("player_id")["Importe"].max()
             n_ofertas = recibidas.groupby("player_id")["Importe"].count()
             mios["Mejor oferta recibida"] = mios["player_id"].map(mejor_oferta)
-            mios["Nº ofertas recibidas"] = mios["player_id"].map(n_ofertas).fillna(0).astype(int)
+            mios["Nº offers recibidas"] = mios["player_id"].map(n_ofertas).fillna(0).astype(int)
 
-    def etiqueta(row):
+    def label(row):
         oferta = row["Mejor oferta recibida"]
         if pd.notna(oferta) and oferta >= row["Valor justo estimado"]:
             return "Vender ahora (tienes oferta igual o por encima del valor justo)"
@@ -832,12 +834,12 @@ def sugerir_ventas(df: pd.DataFrame, data: dict = None, metrica="Puntuacion pote
             return "Infravalorado (no vender)"
         return "Precio acorde a su rendimiento"
 
-    mios["Recomendacion"] = mios.apply(etiqueta, axis=1)
+    mios["Recomendacion"] = mios.apply(label, axis=1)
 
     columnas = [
         "player_id", "Jugador", "Posicion", "Valor de mercado", "Clausula",
         "Valor justo estimado", "Diferencia (VM - justo)", "% sobrevaloracion",
-        "Mejor oferta recibida", "Nº ofertas recibidas", "Recomendacion",
+        "Mejor oferta recibida", "Nº offers recibidas", "Recomendacion",
     ]
     columnas = [c for c in columnas if c in mios.columns]
     return (
@@ -847,47 +849,47 @@ def sugerir_ventas(df: pd.DataFrame, data: dict = None, metrica="Puntuacion pote
     )
 
 
-def login_y_resolver_liga(client: BiwengerClient, league_id=None):
-    """Inicia sesion y detecta liga + user_id (team-id) para esa liga.
+def login_and_resolve_league(client: BiwengerClient, league_id=None):
+    """Logs in and detects the league + user_id (team-id) for that league.
 
-    Lanza RuntimeError si no ha podido resolver ninguna liga (por ejemplo,
-    si BIWENGER_LEAGUE_ID no coincide con ninguna de tu cuenta y tampoco se
-    ha encontrado ninguna liga automaticamente).
+    Raises RuntimeError if it couldn't resolve any league (for example, if
+    BIWENGER_LEAGUE_ID doesn't match any league on your account and no
+    league could be found automatically either).
     """
     client.login()
     leagues, match = client.resolve_league(league_id)
     if not client.league_id:
         raise RuntimeError(
-            "No se ha podido detectar tu liga automaticamente. Anade "
-            "BIWENGER_LEAGUE_ID a tu .env con el ID de tu liga."
+            "Could not detect your league automatically. Add "
+            "BIWENGER_LEAGUE_ID to your .env with your league's ID."
         )
     if not league_id and len(leagues) > 1:
-        print("  Tienes varias ligas, uso la primera. Si no es la que "
-              "quieres, pon BIWENGER_LEAGUE_ID en tu .env:")
+        print("  You have several leagues, using the first one. If it's not "
+              "the one you want, set BIWENGER_LEAGUE_ID in your .env:")
         for l in leagues:
             print(f"    - {l.get('name')}: id={l.get('id')}")
     return leagues, match
 
 
-def cargar_liga(client: BiwengerClient):
-    """Devuelve (standings, score_id) de tu liga."""
+def load_league(client: BiwengerClient):
+    """Returns (standings, score_id) for your league."""
     league = client.get_league()
     standings = league.get("standings") or []
     if not standings:
         raise RuntimeError(
-            "No se ha encontrado 'standings' en la respuesta de la liga. "
-            "Ejecuta 01_explorar_api.py y revisa output/debug/league.json."
+            "Could not find 'standings' in the league response. "
+            "Run 01_explorar_api.py and check output/debug/league.json."
         )
     score_id = league.get("scoreID")
     if score_id is None:
         raise RuntimeError(
-            "No se ha encontrado 'scoreID' en la respuesta de la liga. "
-            "Revisa output/debug/league.json."
+            "Could not find 'scoreID' in the league response. "
+            "Check output/debug/league.json."
         )
     return standings, score_id
 
 
-def identificar_mi_equipo(standings, client: BiwengerClient, own_team_id=None):
+def identify_my_team(standings, client: BiwengerClient, own_team_id=None):
     if own_team_id:
         return own_team_id
     for s in standings:
@@ -896,14 +898,14 @@ def identificar_mi_equipo(standings, client: BiwengerClient, own_team_id=None):
         if str(uid) == str(client.user_id) or str(user_obj.get("id")) == str(client.user_id):
             return s.get("id")
     print(
-        "  [!] No se ha podido identificar tu propio equipo automaticamente "
-        "entre los rivales. Pasa own_team_id (tu team id, visible en "
-        "output/debug/sample_team.json o league.json) para forzarlo."
+        "  [!] Could not automatically identify your own team among the "
+        "rivals. Pass own_team_id (your team id, visible in "
+        "output/debug/sample_team.json or league.json) to force it."
     )
     return None
 
 
-def cargar_plantilla(client: BiwengerClient, team_id, nombre_equipo):
+def load_squad(client: BiwengerClient, team_id, nombre_equipo):
     team = client.get_team(team_id)
     jugadores = team.get("players") if isinstance(team, dict) else None
     filas = []
@@ -911,8 +913,9 @@ def cargar_plantilla(client: BiwengerClient, team_id, nombre_equipo):
         for p in jugadores:
             if not isinstance(p, dict):
                 continue
-            # el precio de compra y la clausula NO estan en el nivel superior
-            # del jugador, sino anidados en 'owner' (ver output/debug/sample_team.json)
+            # the purchase price and the buyout clause are NOT at the top
+            # level of the player, but nested inside 'owner' (see
+            # output/debug/sample_team.json)
             owner = p.get("owner") if isinstance(p.get("owner"), dict) else {}
             filas.append(
                 {
@@ -920,16 +923,17 @@ def cargar_plantilla(client: BiwengerClient, team_id, nombre_equipo):
                     "equipo_rival": nombre_equipo,
                     "precio_roster": first_present(owner, CAMPOS_CANDIDATOS["roster_price"]),
                     "clausula": first_present(owner, CAMPOS_CANDIDATOS["roster_clause"]),
-                    # plazo (epoch) hasta el que esa clausula esta bloqueada
-                    # (tipico tras una compra/clausulazo reciente); mientras
-                    # dure, la API rechazaria un place_offer sobre este jugador
+                    # deadline (epoch) until which that buyout clause is
+                    # locked (typical right after a recent purchase/buyout);
+                    # while it lasts, the API would reject a place_offer on
+                    # this player
                     "clausula_bloqueada_hasta": owner.get("clauseLockedUntil"),
                 }
             )
     return filas
 
 
-def _parse_mercado(market: dict):
+def _parse_market(market: dict):
     lista = None
     for key in CAMPOS_CANDIDATOS["market_list"]:
         v = market.get(key) if isinstance(market, dict) else None
@@ -937,8 +941,8 @@ def _parse_mercado(market: dict):
             lista = v
             break
     if lista is None:
-        print("  [!] No se ha encontrado la lista de jugadores del mercado. "
-              "Revisa output/debug/market.json tras ejecutar 01_explorar_api.py.")
+        print("  [!] Could not find the market player list. "
+              "Check output/debug/market.json after running 01_explorar_api.py.")
         return []
 
     filas = []
@@ -957,13 +961,13 @@ def _parse_mercado(market: dict):
     return filas
 
 
-def cargar_mercado(client: BiwengerClient):
-    return _parse_mercado(client.get_market())
+def load_market(client: BiwengerClient):
+    return _parse_market(client.get_market())
 
 
-def _parse_ofertas(market: dict):
-    """Extrae la lista de ofertas 'en bruto' del mercado (compra/venta,
-    tanto recibidas como enviadas). Ver ofertas() para filtrarlas."""
+def _parse_offers(market: dict):
+    """Extracts the 'raw' list of market offers (buy/sell, both received
+    and sent). See offers() to filter them."""
     offers = market.get("offers") if isinstance(market, dict) else None
     if not isinstance(offers, list):
         return []
@@ -986,36 +990,36 @@ def _parse_ofertas(market: dict):
     return filas
 
 
-def enriquecer_con_detalle(client: BiwengerClient, player_ids, progreso=True, max_pausas_largas=6,
+def enrich_with_details(client: BiwengerClient, player_ids, progreso=True, max_pausas_largas=6,
                             on_progress=None, guardar_cada=10, parar_en_primer_limite=False):
     """
-    cf.biwenger.com corta por rate-limit tras ~200 peticiones seguidas.
-    Probamos a espaciarlas con una pausa preventiva a mitad de camino, pero
-    el corte seguia saltando en el mismo punto exacto (jugador ~200) incluso
-    tras una pausa de 5 minutos -- asi que NO es una ventana corta que se
-    resetee esperando, sino mas bien un tope de peticiones totales en una
-    ventana mas larga. Espaciar peticiones dentro de la misma ejecucion no
-    ayuda; lo unico que evita el corte de verdad es no volver a pedir lo
-    mismo (ver cargar_datos_liga, que cachea en output/cache/ y solo pide
-    lo que aun falte en ejecuciones posteriores).
+    cf.biwenger.com cuts you off with a rate limit after ~200 requests in a
+    row. We tried spacing them out with a preventive pause halfway through,
+    but the cutoff kept hitting at the exact same point (player ~200) even
+    after a 5-minute pause -- so it's NOT a short window that resets by
+    waiting, but rather more like a cap on total requests within a longer
+    window. Spacing out requests within the same run doesn't help; the only
+    thing that really avoids the cutoff is not requesting the same thing
+    again (see load_league_data, which caches to output/cache/ and only
+    requests what's still missing on later runs).
 
-    Cuando un jugador agota los reintentos rapidos del cliente (ver
-    BiwengerClient._get) por un 429, hay dos modos:
-    - parar_en_primer_limite=False (por defecto): pausa larga (30s) y
-      reintenta ESE MISMO jugador en vez de rendirse y pasar al siguiente
-      (que fallaria igual, en cascada). max_pausas_largas limita cuantas
-      pausas largas se hacen POR JUGADOR antes de darlo por perdido.
-    - parar_en_primer_limite=True: en cuanto se agotan los reintentos
-      rapidos del cliente para un jugador, para la descarga entera ahi
-      mismo (sin pausas largas ni seguir con el resto) y devuelve lo
-      conseguido en esta tanda. Pensado para ir completando la cache poco a
-      poco en varias ejecuciones cortas en vez de una tirada larga.
+    When a player exhausts the client's fast retries (see
+    BiwengerClient._get) due to a 429, there are two modes:
+    - parar_en_primer_limite=False (default): a long pause (30s) and it
+      retries THAT SAME player instead of giving up and moving to the next
+      one (which would fail the same way, in a cascade). max_pausas_largas
+      limits how many long pauses happen PER PLAYER before giving up on
+      them.
+    - parar_en_primer_limite=True: as soon as the client's fast retries are
+      exhausted for a player, it stops the whole download right there (no
+      long pauses, doesn't continue with the rest) and returns what was
+      obtained in this batch. Meant for gradually completing the cache
+      across several short runs instead of one long run.
 
-    on_progress: callback opcional que se llama cada `guardar_cada`
-    jugadores (y al terminar, si se interrumpe con Ctrl+C, o si se para por
-    parar_en_primer_limite) con el dict `detalles` conseguido hasta ese
-    momento, para poder guardarlo en cache de forma incremental y no perder
-    el progreso.
+    on_progress: optional callback called every `guardar_cada` players (and
+    at the end, if interrupted with Ctrl+C, or if it stops due to
+    parar_en_primer_limite) with the `detalles` dict obtained so far, so it
+    can be saved to cache incrementally without losing progress.
     """
     detalles = {}
     ids = sorted(player_ids)
@@ -1023,34 +1027,34 @@ def enriquecer_con_detalle(client: BiwengerClient, player_ids, progreso=True, ma
     try:
         for i, pid in enumerate(ids, start=1):
             if progreso and (i % 10 == 0 or i == total):
-                print(f"    jugador {i}/{total}...")
+                print(f"    player {i}/{total}...")
             pausas = 0
             while True:
                 try:
-                    detalles[pid] = recortar_temporadas_antiguas(client.get_player_detail(pid))
+                    detalles[pid] = trim_old_seasons(client.get_player_detail(pid))
                     break
                 except BiwengerAPIError as e:
                     es_rate_limit = "429" in str(e) or "Demasiados" in str(e)
                     if es_rate_limit and parar_en_primer_limite:
-                        print(f"    limite de peticiones alcanzado en el jugador {pid} -- "
-                              f"paro aqui ({len(detalles)}/{total} conseguidos en esta tanda).")
+                        print(f"    rate limit reached at player {pid} -- "
+                              f"stopping here ({len(detalles)}/{total} obtained in this batch).")
                         if on_progress:
                             on_progress(detalles)
                         return detalles
                     if es_rate_limit and pausas < max_pausas_largas:
                         pausas += 1
-                        print(f"    (rate-limit sostenido, pausa larga #{pausas} de 30s "
-                              f"antes de reintentar el jugador {pid}...)")
+                        print(f"    (sustained rate-limit, long pause #{pausas} of 30s "
+                              f"before retrying player {pid}...)")
                         time.sleep(30)
                         continue
-                    print(f"    [!] no se pudo obtener el jugador {pid}: {e}")
+                    print(f"    [!] could not fetch player {pid}: {e}")
                     break
             if on_progress and guardar_cada and i % guardar_cada == 0:
                 on_progress(detalles)
     except KeyboardInterrupt:
         if on_progress:
-            print(f"    interrumpido -- guardando el progreso conseguido hasta ahora "
-                  f"({len(detalles)}/{total} jugadores)...")
+            print(f"    interrupted -- saving progress obtained so far "
+                  f"({len(detalles)}/{total} players)...")
             on_progress(detalles)
         raise
     if on_progress:
@@ -1059,139 +1063,139 @@ def enriquecer_con_detalle(client: BiwengerClient, player_ids, progreso=True, ma
 
 
 # ---------------------------------------------------------------------------
-# Cache local (output/cache/*.json) + orquestacion para el notebook: evita
-# volver a pedir todo a la API (con su limite de peticiones) cada vez que
-# reejecutas el notebook. Usa forzar_refresco=True cuando quieras datos
-# frescos de verdad.
+# Local cache (output/cache/*.json) + orchestration for the notebook: avoids
+# requesting everything from the API again (with its rate limit) every time
+# you rerun the notebook. Use forzar_refresco=True when you really want
+# fresh data.
 # ---------------------------------------------------------------------------
 
-# archivos de cache que pueden faltar en una cache generada por una version
-# anterior de este modulo, sin que eso obligue a re-descargar todo
+# cache files that may be missing from a cache generated by an older
+# version of this module, without that forcing a full re-download
 _CACHE_FILES_OPCIONALES = {"ofertas_raw"}
 
 
-def _hay_cache():
+def _cache_exists():
     return all(
         p.exists() for key, p in _CACHE_FILES.items() if key not in _CACHE_FILES_OPCIONALES
     )
 
 
-def _guardar_cache(data: dict):
+def _save_cache(data: dict):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     for key, path in _CACHE_FILES.items():
         path.write_text(json.dumps(data[key], ensure_ascii=False), encoding="utf-8")
 
 
-def _leer_cache():
+def _read_cache():
     data = {}
     for key, path in _CACHE_FILES.items():
         if not path.exists() and key in _CACHE_FILES_OPCIONALES:
             data[key] = []
             continue
         data[key] = json.loads(path.read_text(encoding="utf-8"))
-    # los dicts de Python con claves int se guardan como string en JSON
+    # Python dicts with int keys are saved as strings in JSON
     data["detalles"] = {int(k): v for k, v in data["detalles"].items()}
     return data
 
 
-def _todos_los_ids(data: dict):
+def _all_ids(data: dict):
     todos_ids = {f["player_id"] for f in data["mercado_raw"] if f.get("player_id")}
     for r in data["rosters_raw"].values():
         todos_ids |= {f["player_id"] for f in r["filas"] if f.get("player_id")}
     return todos_ids
 
 
-def _detalles_faltantes(data: dict):
-    """ids de jugadores que aparecen en mercado/plantillas pero de los que
-    aun no tenemos el detalle descargado en `data['detalles']`."""
-    return _todos_los_ids(data) - set(data["detalles"].keys())
+def _missing_details(data: dict):
+    """ids of players that appear in the market/rosters but whose detail we
+    haven't downloaded yet in `data['detalles']`."""
+    return _all_ids(data) - set(data["detalles"].keys())
 
 
-def _antiguedad_cache_horas():
-    """Horas desde el ultimo guardado de la cache (segun la fecha de
-    modificacion de sus ficheros). None si no hay cache."""
+def _cache_age_hours():
+    """Hours since the cache was last saved (based on the modification date
+    of its files). None if there's no cache."""
     ref = _CACHE_FILES["standings"]
     if not ref.exists():
         return None
     return (time.time() - ref.stat().st_mtime) / 3600
 
 
-def cargar_datos_liga(email, password, league_id=None, own_team_id=None, forzar_refresco=False,
+def load_league_data(email, password, league_id=None, own_team_id=None, forzar_refresco=False,
                        max_antiguedad_horas=24, parar_en_primer_limite=False):
     """
-    Punto de entrada principal para el notebook de analisis: descarga (o
-    reusa de output/cache/*.json) el mercado, las plantillas de todos los
-    rivales, tu plantilla, y el detalle de cada jugador implicado.
+    Main entry point for the analysis notebook: downloads (or reuses from
+    output/cache/*.json) the market, all rivals' rosters, your roster, and
+    the detail for every player involved.
 
-    Por defecto reusa la cache local si ya existe Y esta completa Y no tiene
-    mas de `max_antiguedad_horas` (24 por defecto) -- pasado ese tiempo se
-    refresca sola automaticamente, sin que tengas que acordarte de pasar
-    forzar_refresco=True cada dia. Pasa max_antiguedad_horas=None para
-    desactivar este chequeo (usar la cache aunque sea vieja, mientras este
-    completa). forzar_refresco=True siempre fuerza un refresco, sin mirar
-    la antiguedad.
+    By default it reuses the local cache if it already exists AND is
+    complete AND is no more than `max_antiguedad_horas` old (24 by default)
+    -- past that it refreshes itself automatically, so you don't have to
+    remember to pass forzar_refresco=True every day. Pass
+    max_antiguedad_horas=None to disable this check (use the cache even if
+    it's old, as long as it's complete). forzar_refresco=True always forces
+    a refresh, regardless of age.
 
-    RESUMIBLE: el detalle de cada jugador (lo mas lento, por el limite de
-    peticiones de la API) se guarda en cache de forma incremental segun se
-    va consiguiendo -- si esta funcion se interrumpe (Ctrl+C, un corte, etc.)
-    a medias, la proxima vez que la llames (sin forzar_refresco) retoma
-    donde se quedo: NO vuelve a pedir los jugadores que ya tenia, solo los
-    que le faltan. Esto es distinto del refresco automatico por antiguedad:
-    una cache INCOMPLETA se retoma siempre (sin importar cuanto tiempo haya
-    pasado), porque interrumpida no significa desactualizada.
+    RESUMABLE: each player's detail (the slowest part, due to the API rate
+    limit) is saved to cache incrementally as it's obtained -- if this
+    function is interrupted (Ctrl+C, a cutoff, etc.) partway through, the
+    next time you call it (without forzar_refresco) it picks up where it
+    left off: it does NOT re-request players it already had, only the ones
+    still missing. This is different from the automatic age-based refresh:
+    an INCOMPLETE cache is always resumed (no matter how much time has
+    passed), because interrupted doesn't mean outdated.
 
-    parar_en_primer_limite: si True, en cuanto se alcance el limite de
-    peticiones de la API (429 sostenido) se sale de la funcion ahi mismo en
-    vez de esperar con pausas largas -- lo conseguido hasta ese momento ya
-    esta guardado en cache (ver arriba). Util para ir completando la cache
-    poco a poco en varias ejecuciones cortas: llamas otra vez mas tarde y
-    retoma solo lo que falte.
+    parar_en_primer_limite: if True, as soon as the API rate limit is hit
+    (sustained 429) it exits the function right there instead of waiting
+    with long pauses -- what was obtained up to that point is already saved
+    to cache (see above). Useful for gradually completing the cache across
+    several short runs: you call it again later and it resumes only what's
+    missing.
 
-    En cualquier caso -- completo, incompleto, o parado por limite de
-    peticiones -- lo que devuelve esta funcion se relee siempre de la cache
-    en disco (no de lo que haya en memoria de esta llamada), porque la
-    cache es la combinacion de esta ejecucion con todas las anteriores.
+    In any case -- complete, incomplete, or stopped due to the rate limit
+    -- what this function returns is always re-read from the cache on disk
+    (not from whatever is in memory for this call), because the cache is
+    the combination of this run with all previous ones.
     """
     detalles_previos = {}
-    if not forzar_refresco and _hay_cache():
-        cache = _leer_cache()
-        faltan_cache = _detalles_faltantes(cache)
+    if not forzar_refresco and _cache_exists():
+        cache = _read_cache()
+        faltan_cache = _missing_details(cache)
         if not faltan_cache:
-            antiguedad = _antiguedad_cache_horas()
+            antiguedad = _cache_age_hours()
             demasiado_vieja = (
                 max_antiguedad_horas is not None
                 and antiguedad is not None
                 and antiguedad >= max_antiguedad_horas
             )
             if not demasiado_vieja:
-                aviso_antiguedad = f" ({antiguedad:.1f}h de antiguedad)" if antiguedad is not None else ""
-                print(f"Cargando datos desde cache local ({CACHE_DIR}), completa{aviso_antiguedad}. "
-                      "Llama a cargar_datos_liga(..., forzar_refresco=True) para pedir datos frescos.")
+                aviso_antiguedad = f" ({antiguedad:.1f}h old)" if antiguedad is not None else ""
+                print(f"Loading data from local cache ({CACHE_DIR}), complete{aviso_antiguedad}. "
+                      "Call load_league_data(..., forzar_refresco=True) to request fresh data.")
                 return cache
-            print(f"Cache local completa pero tiene {antiguedad:.1f}h de antiguedad "
-                  f"(mas de {max_antiguedad_horas}h) -- refrescando automaticamente "
-                  "con datos de jugador frescos...")
-            # OJO: no reusamos detalles_previos aqui a proposito -- una cache
-            # vieja pero completa necesita puntos/precio/forma de verdad
-            # actualizados, no solo repetir lo que ya tenia
+            print(f"Local cache is complete but is {antiguedad:.1f}h old "
+                  f"(more than {max_antiguedad_horas}h) -- refreshing automatically "
+                  "with fresh player data...")
+            # NOTE: we deliberately don't reuse detalles_previos here -- an
+            # old but complete cache needs truly updated points/price/form,
+            # not just repeating what it already had
         else:
             detalles_previos = cache["detalles"]
-            print(f"Cache local incompleta: ya hay {len(detalles_previos)} jugadores, "
-                  f"faltan {len(faltan_cache)}. Retomando -- no se vuelve a pedir lo ya descargado...")
+            print(f"Local cache is incomplete: already have {len(detalles_previos)} players, "
+                  f"{len(faltan_cache)} missing. Resuming -- won't re-request what's already downloaded...")
 
-    print("Descargando datos de la API de Biwenger...")
+    print("Downloading data from the Biwenger API...")
     client = BiwengerClient(email, password, league_id=league_id)
-    login_y_resolver_liga(client, league_id)
-    standings, score_id = cargar_liga(client)
-    mi_team_id = identificar_mi_equipo(standings, client, own_team_id)
+    login_and_resolve_league(client, league_id)
+    standings, score_id = load_league(client)
+    mi_team_id = identify_my_team(standings, client, own_team_id)
 
-    print("  mercado...")
+    print("  market...")
     market_full = client.get_market()
-    mercado_raw = _parse_mercado(market_full)
-    ofertas_raw = _parse_ofertas(market_full)
+    mercado_raw = _parse_market(market_full)
+    ofertas_raw = _parse_offers(market_full)
     balance = _dig(market_full, ["status", "balance"])
 
-    print(f"  plantillas de {len(standings)} equipo(s)...")
+    print(f"  rosters for {len(standings)} team(s)...")
     rosters_raw = {}
     for s in standings:
         team_id = s.get("id")
@@ -1199,9 +1203,9 @@ def cargar_datos_liga(email, password, league_id=None, own_team_id=None, forzar_
             continue
         nombre = first_present(s, ["name"], f"equipo:{team_id}")
         es_mio = str(team_id) == str(mi_team_id)
-        filas = cargar_plantilla(client, team_id, nombre)
-        # el team_id de un standing es el mismo valor que su user_id (el que
-        # hace falta como 'to' en place_offer para clausularle un jugador)
+        filas = load_squad(client, team_id, nombre)
+        # a standing's team_id is the same value as its user_id (the one
+        # needed as 'to' in place_offer to buy out a player's clause)
         rosters_raw[team_id] = {"team_id": team_id, "es_mio": es_mio, "nombre": nombre, "filas": filas}
 
     data_base = {
@@ -1214,51 +1218,51 @@ def cargar_datos_liga(email, password, league_id=None, own_team_id=None, forzar_
         "ofertas_raw": ofertas_raw,
     }
 
-    todos_ids = _todos_los_ids(data_base)
+    todos_ids = _all_ids(data_base)
     faltan_ids = todos_ids - set(detalles_previos.keys())
     if detalles_previos:
-        print(f"  {len(detalles_previos)} de {len(todos_ids)} jugadores ya en cache; "
-              f"pidiendo los {len(faltan_ids)} que faltan...")
+        print(f"  {len(detalles_previos)} of {len(todos_ids)} players already cached; "
+              f"requesting the {len(faltan_ids)} still missing...")
     else:
-        print(f"  detalle de {len(todos_ids)} jugadores...")
+        print(f"  detail for {len(todos_ids)} players...")
 
-    def guardar_progreso(detalles_parciales):
+    def save_progress(detalles_parciales):
         data_actual = dict(data_base)
         data_actual["detalles"] = {**detalles_previos, **detalles_parciales}
-        _guardar_cache(data_actual)
+        _save_cache(data_actual)
 
-    nuevos_detalles = enriquecer_con_detalle(
-        client, faltan_ids, on_progress=guardar_progreso, parar_en_primer_limite=parar_en_primer_limite,
+    nuevos_detalles = enrich_with_details(
+        client, faltan_ids, on_progress=save_progress, parar_en_primer_limite=parar_en_primer_limite,
     )
 
     data = dict(data_base)
     data["detalles"] = {**detalles_previos, **nuevos_detalles}
-    _guardar_cache(data)
-    faltan_todavia = len(_detalles_faltantes(data))
+    _save_cache(data)
+    faltan_todavia = len(_missing_details(data))
     if faltan_todavia:
-        print(f"Datos guardados en cache local ({CACHE_DIR}). "
-              f"Ojo: aun faltan {faltan_todavia} jugadores -- "
-              "vuelve a llamar a esta funcion para reintentar solo esos.")
+        print(f"Data saved to local cache ({CACHE_DIR}). "
+              f"Note: {faltan_todavia} players are still missing -- "
+              "call this function again to retry just those.")
     else:
-        print(f"Datos completos guardados en cache local ({CACHE_DIR}).")
-    # siempre releemos de disco: la cache es la combinacion de esta llamada
-    # con todas las anteriores, es la fuente de verdad
-    return _leer_cache()
+        print(f"Complete data saved to local cache ({CACHE_DIR}).")
+    # always re-read from disk: the cache is the combination of this call
+    # with all previous ones, it's the source of truth
+    return _read_cache()
 
 
-def construir_dataframe(data: dict) -> pd.DataFrame:
+def build_dataframe(data: dict) -> pd.DataFrame:
     """
-    Construye el DataFrame combinado (mercado + rivales + tu equipo, cada
-    fila con su 'Origen') a partir de lo que devuelve cargar_datos_liga().
+    Builds the combined DataFrame (market + rivals + your team, each row
+    with its 'Origen') from what load_league_data() returns.
 
-    Determina la temporada de liga "actual" por mayoria entre todos los
-    jugadores (ver temporada_liga_mas_comun) para que un jugador que lleva
-    tiempo sin jugar no arrastre puntos de hace 2+ temporadas disfrazados
-    de "esta temporada"/"la anterior".
+    Determines the "current" league season by majority vote across all
+    players (see most_common_league_season) so that a player who hasn't
+    played in a while doesn't carry over points from 2+ seasons ago
+    disguised as "this season"/"the previous one".
     """
     detalles = data["detalles"]
     score_id = data["score_id"]
-    temporada_actual_id = temporada_liga_mas_comun(detalles)
+    temporada_actual_id = most_common_league_season(detalles)
     temporada_anterior_id = (
         str(int(temporada_actual_id) - 1)
         if temporada_actual_id is not None and temporada_actual_id.isdigit()
@@ -1267,21 +1271,22 @@ def construir_dataframe(data: dict) -> pd.DataFrame:
     filas = []
 
     for f in data["mercado_raw"]:
-        # si el jugador tiene dueno (vendedor_id presente), la UNICA via
-        # real de ficharlo es el clausulazo -- el "precio de mercado" que
-        # trae la API para el no es una compra directa alternativa, es solo
-        # informativo (a veces es MENOR que la clausula, a veces MUCHO
-        # mayor: no representa un precio de compra real). Ese jugador ya
-        # aparece via su fila de Origen 'Rival: X' con la clausula
-        # correcta -- no lo dupliques aqui como si fuera comprable suelto.
+        # if the player has an owner (vendedor_id present), the ONLY real
+        # way to sign them is a buyout clause -- the "market price" the API
+        # gives for them isn't an alternative direct purchase, it's purely
+        # informative (sometimes it's LOWER than the clause, sometimes MUCH
+        # higher: it doesn't represent a real purchase price). That player
+        # already appears via their 'Rival: X' Origen row with the correct
+        # clause -- don't duplicate them here as if they were purchasable
+        # on their own.
         if f.get("vendedor_id") is not None:
             continue
         detalle = detalles.get(f["player_id"])
         if not detalle:
             continue
-        if jugador_irrelevante(detalle, score_id, temporada_actual_id, temporada_anterior_id):
+        if is_irrelevant_player(detalle, score_id, temporada_actual_id, temporada_anterior_id):
             continue
-        filas.append(construir_fila_jugador(
+        filas.append(build_player_row(
             f["player_id"], detalle, score_id,
             {
                 "Origen": "Mercado",
@@ -1297,9 +1302,9 @@ def construir_dataframe(data: dict) -> pd.DataFrame:
             detalle = detalles.get(f["player_id"])
             if not detalle:
                 continue
-            # el filtro de "jugador irrelevante" NO se aplica a tu propio
-            # equipo -- tus jugadores los ves siempre, esten activos o no
-            if not r["es_mio"] and jugador_irrelevante(
+            # the "irrelevant player" filter is NOT applied to your own
+            # team -- you always see your own players, whether active or not
+            if not r["es_mio"] and is_irrelevant_player(
                 detalle, score_id, temporada_actual_id, temporada_anterior_id
             ):
                 continue
@@ -1311,15 +1316,15 @@ def construir_dataframe(data: dict) -> pd.DataFrame:
             extra = {
                 "Origen": origen,
                 "Clausula": clausula,
-                # dos formas de ver el ratio: por puntos TOTALES acumulados
-                # en la temporada, o por puntos MEDIOS (por partido) -- un
-                # jugador con pocos partidos jugados puede salir mal en el
-                # total pero bien en la media, y viceversa
+                # two ways to look at the ratio: by TOTAL points accumulated
+                # this season, or by AVERAGE points (per match) -- a player
+                # with few matches played can look bad on the total but
+                # good on the average, and vice versa
                 "Ratio pts totales/clausula (actual)": ratio(pts_actual, clausula),
-                "Ratio pts medios/clausula (actual)": ratio(puntos_por_partido(pts_actual, partidos_actual), clausula),
+                "Ratio pts medios/clausula (actual)": ratio(points_per_match(pts_actual, partidos_actual), clausula),
                 "Ratio pts totales/clausula (anterior)": ratio(pts_anterior, clausula),
                 "Ratio pts medios/clausula (anterior)": ratio(
-                    puntos_por_partido(pts_anterior, partidos_anterior), clausula
+                    points_per_match(pts_anterior, partidos_anterior), clausula
                 ),
                 "Vendedor (id)": None if r["es_mio"] else r.get("team_id"),
                 "Clausula bloqueada hasta": (
@@ -1329,30 +1334,30 @@ def construir_dataframe(data: dict) -> pd.DataFrame:
                     not bloqueada_hasta or bloqueada_hasta <= datetime.now().timestamp()
                 ),
             }
-            filas.append(construir_fila_jugador(
+            filas.append(build_player_row(
                 f["player_id"], detalle, score_id, extra, temporada_actual_id, temporada_anterior_id
             ))
 
     return pd.DataFrame(filas)
 
 
-def ofertas(data: dict, tipo="recibidas", solo_identificadas=False) -> pd.DataFrame:
+def offers(data: dict, tipo="recibidas", solo_identificadas=False) -> pd.DataFrame:
     """
-    Ofertas de compra activas en tu mercado, con el nombre del jugador ya
-    resuelto. tipo:
-    - 'recibidas': ofertas que otros managers han hecho por TUS jugadores
-      (util para decidir si aceptar/rechazar desde la app; esta libreria no
-      tiene un metodo para aceptar/rechazar, solo para consultarlas).
-    - 'enviadas': ofertas que TU has hecho (via place_offer u otro medio).
-    - 'todas': sin filtrar.
+    Active buy offers on your market, with the player's name already
+    resolved. tipo:
+    - 'recibidas': offers other managers have made for YOUR players
+      (useful for deciding whether to accept/reject from the app; this
+      library has no method to accept/reject, only to query them).
+    - 'enviadas': offers YOU have made (via place_offer or another means).
+    - 'todas': unfiltered.
 
-    IMPORTANTE: Biwenger genera automaticamente una oferta "recibida" para
-    CADA jugador de tu plantilla, cercana a su valor de mercado, SIN postor
-    real detras (postor 'Desconocido', sin 'de_id') -- es la venta rapida
-    de la plataforma, no demanda real de otro manager. Se detecto con
-    datos reales: 15/15 jugadores de una plantilla tenian una de estas.
-    Pasa solo_identificadas=True para descartarlas y quedarte solo con
-    ofertas de un manager identificado (demanda real).
+    IMPORTANT: Biwenger automatically generates a "received" offer for
+    EVERY player on your roster, close to their market value, with NO real
+    bidder behind it (bidder 'Desconocido', no 'de_id') -- it's the
+    platform's quick sale, not real demand from another manager. Detected
+    with real data: 15/15 players on a roster had one of these. Pass
+    solo_identificadas=True to discard them and keep only offers from an
+    identified manager (real demand).
     """
     detalles = data["detalles"]
     mi_team_id = data["mi_team_id"]
@@ -1383,35 +1388,35 @@ def ofertas(data: dict, tipo="recibidas", solo_identificadas=False) -> pd.DataFr
 
 
 # ---------------------------------------------------------------------------
-# Historial (output/history/<timestamp>/*.json): copias fechadas de los
-# datos, para poder comparar la evolucion de tu equipo/el mercado con el
-# tiempo (la cache de output/cache/ en cambio se sobrescribe cada refresco).
+# History (output/history/<timestamp>/*.json): dated copies of the data, so
+# you can compare how your team/the market evolves over time (the
+# output/cache/ cache, by contrast, is overwritten on every refresh).
 # ---------------------------------------------------------------------------
 
-def guardar_snapshot(data: dict):
-    """Guarda una copia fechada de `data` (lo que devuelve cargar_datos_liga)
-    en output/history/<timestamp>/. Llamalo justo despues de un
-    forzar_refresco=True si quieres poder comparar mas adelante."""
+def save_snapshot(data: dict):
+    """Saves a dated copy of `data` (what load_league_data returns) to
+    output/history/<timestamp>/. Call it right after a forzar_refresco=True
+    if you want to be able to compare later on."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     carpeta = HISTORY_DIR / ts
     carpeta.mkdir(parents=True, exist_ok=True)
     for key in _CACHE_FILES:
         (carpeta / f"{key}.json").write_text(json.dumps(data[key], ensure_ascii=False), encoding="utf-8")
-    print(f"Snapshot guardado en {carpeta}")
+    print(f"Snapshot saved to {carpeta}")
     return carpeta
 
 
-def listar_snapshots():
-    """Nombres (timestamp) de los snapshots guardados, mas antiguo primero."""
+def list_snapshots():
+    """Names (timestamps) of saved snapshots, oldest first."""
     if not HISTORY_DIR.exists():
         return []
     return sorted(p.name for p in HISTORY_DIR.iterdir() if p.is_dir())
 
 
-def cargar_snapshot(nombre: str) -> dict:
-    """Carga un snapshot guardado por guardar_snapshot() (usa listar_snapshots()
-    para ver los nombres disponibles). Devuelve el mismo formato que
-    cargar_datos_liga(), listo para pasar a construir_dataframe()."""
+def load_snapshot(nombre: str) -> dict:
+    """Loads a snapshot saved by save_snapshot() (use list_snapshots()
+    to see the available names). Returns the same format as
+    load_league_data(), ready to pass to build_dataframe()."""
     carpeta = HISTORY_DIR / nombre
     data = {}
     for key in _CACHE_FILES:

@@ -1,25 +1,25 @@
 """
-Genera el Excel de analisis: mercado + plantillas rivales + tu plantilla,
-con ratios puntos/valor de mercado y puntos/clausula (temporada actual y,
-si la API la trae, la temporada anterior).
+Generates the analysis Excel file: market + rival squads + your squad,
+with points/market-value and points/clause ratios (current season and,
+if the API provides it, the previous season).
 
-IMPORTANTE: la API de Biwenger no es oficial ni esta documentada, asi que
-los nombres de campo (ver CAMPOS_CANDIDATOS en biwenger_helpers.py) son la
-mejor aproximacion posible a partir de clientes de la comunidad. Si al
-ejecutar ves avisos de "campo no encontrado", ejecuta antes
-01_explorar_api.py, mira el JSON real en output/debug/ y ajustamos juntos
-esas listas.
+IMPORTANT: the Biwenger API is unofficial and undocumented, so the field
+names (see CAMPOS_CANDIDATOS in biwenger_helpers.py) are the best
+approximation possible based on community clients. If you see "field not
+found" warnings when running it, run 01_explorar_api.py first, look at
+the real JSON in output/debug/, and we'll adjust those lists together.
 
-Usa la misma cache local que el notebook de analisis (output/cache/*.json)
--- la primera vez descarga todo de la API (puede tardar varios minutos por
-el limite de peticiones), las siguientes es practicamente instantaneo.
+Uses the same local cache as the analysis notebook (output/cache/*.json)
+-- the first time it downloads everything from the API (it can take
+several minutes due to the request rate limit), subsequent runs are
+practically instant.
 
-Uso:
-    1. Copia .env.example a .env y rellenalo.
-    2. (recomendado la primera vez) python 01_explorar_api.py  -> valida la conexion
-    3. python 02_generar_excel.py            -> usa la cache si ya existe
-       python 02_generar_excel.py --refresh  -> vuelve a descargar todo de la API
-    4. El Excel se genera en output/analisis_biwenger_<fecha>.xlsx
+Usage:
+    1. Copy .env.example to .env and fill it in.
+    2. (recommended the first time) python 01_explorar_api.py  -> validates the connection
+    3. python 02_generar_excel.py            -> uses the cache if it already exists
+       python 02_generar_excel.py --refresh  -> re-downloads everything from the API
+    4. The Excel file is generated at output/analisis_biwenger_<date>.xlsx
 """
 
 from __future__ import annotations
@@ -34,11 +34,11 @@ from dotenv import load_dotenv
 from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.utils import get_column_letter
 
-from biwenger_helpers import cargar_datos_liga, construir_dataframe
+from biwenger_helpers import load_league_data, build_dataframe
 
-# evita que un simbolo no-ASCII en un print tumbe el script en consolas que
-# no usan UTF-8 (p.ej. cmd.exe con la codepage por defecto) -- lo sustituye
-# en vez de lanzar UnicodeEncodeError
+# prevents a non-ASCII character in a print from crashing the script on
+# consoles that don't use UTF-8 (e.g. cmd.exe with the default codepage) --
+# it replaces the character instead of raising UnicodeEncodeError
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
@@ -47,7 +47,7 @@ load_dotenv()
 EMAIL = os.getenv("BIWENGER_EMAIL")
 PASSWORD = os.getenv("BIWENGER_PASSWORD")
 LEAGUE_ID = os.getenv("BIWENGER_LEAGUE_ID") or None
-OWN_TEAM_ID = os.getenv("BIWENGER_OWN_TEAM_ID") or None  # override manual si el auto-detect falla
+OWN_TEAM_ID = os.getenv("BIWENGER_OWN_TEAM_ID") or None  # manual override if auto-detect fails
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 
@@ -58,19 +58,19 @@ COLUMNAS_RATIO = [
 ]
 
 
-def hoja_con_formato(writer, df: pd.DataFrame, nombre_hoja: str, columnas_ratio: list):
+def format_sheet(writer, df: pd.DataFrame, nombre_hoja: str, columnas_ratio: list):
     if df.empty:
         df = pd.DataFrame({"Sin datos": []})
     elif "Jugador" in df.columns:
-        # 'Jugador' la primera columna, para poder fijarla y que el nombre
-        # se vea siempre aunque hagas scroll a la derecha
+        # make 'Jugador' the first column, so it can be frozen and the
+        # name stays visible even when scrolling right
         resto = [c for c in df.columns if c != "Jugador"]
         df = df[["Jugador"] + resto]
 
     df.to_excel(writer, sheet_name=nombre_hoja, index=False)
     ws = writer.sheets[nombre_hoja]
 
-    # fija la fila de cabecera y la columna 'Jugador' (columna A) a la vez
+    # freeze the header row and the 'Jugador' column (column A) at the same time
     ws.freeze_panes = "B2"
     ws.auto_filter.ref = ws.dimensions
 
@@ -95,23 +95,23 @@ def hoja_con_formato(writer, df: pd.DataFrame, nombre_hoja: str, columnas_ratio:
 def main():
     if not EMAIL or not PASSWORD:
         sys.exit(
-            "Faltan BIWENGER_EMAIL / BIWENGER_PASSWORD.\n"
-            "Copia .env.example a .env y rellenalo con tus datos de Biwenger."
+            "Missing BIWENGER_EMAIL / BIWENGER_PASSWORD.\n"
+            "Copy .env.example to .env and fill it in with your Biwenger credentials."
         )
 
     forzar_refresco = "--refresh" in sys.argv
     try:
-        data = cargar_datos_liga(
+        data = load_league_data(
             EMAIL, PASSWORD, league_id=LEAGUE_ID, own_team_id=OWN_TEAM_ID,
             forzar_refresco=forzar_refresco,
         )
     except RuntimeError as e:
         sys.exit(str(e))
 
-    print(f"liga: {LEAGUE_ID or '(auto)'}, tu team_id: {data['mi_team_id']}, "
-          f"score_id: {data['score_id']}, saldo: {data['balance']:,}")
+    print(f"league: {LEAGUE_ID or '(auto)'}, your team_id: {data['mi_team_id']}, "
+          f"score_id: {data['score_id']}, balance: {data['balance']:,}")
 
-    df = construir_dataframe(data)
+    df = build_dataframe(data)
 
     df_mercado = df[df["Origen"] == "Mercado"]
     df_rivales = df[df["Origen"].str.startswith("Rival:")]
@@ -128,13 +128,13 @@ def main():
     fecha = datetime.now().strftime("%Y%m%d_%H%M")
     out_path = OUTPUT_DIR / f"analisis_biwenger_{fecha}.xlsx"
 
-    print(f"Generando Excel en {out_path}...")
+    print(f"Generating Excel at {out_path}...")
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        hoja_con_formato(writer, df_mercado, "Mercado", COLUMNAS_RATIO)
-        hoja_con_formato(writer, df_rivales, "Rivales", COLUMNAS_RATIO)
-        hoja_con_formato(writer, df_mias, "Mi equipo", COLUMNAS_RATIO)
+        format_sheet(writer, df_mercado, "Mercado", COLUMNAS_RATIO)
+        format_sheet(writer, df_rivales, "Rivales", COLUMNAS_RATIO)
+        format_sheet(writer, df_mias, "Mi equipo", COLUMNAS_RATIO)
 
-    print(f"\nListo -> {out_path}")
+    print(f"\nDone -> {out_path}")
 
 
 if __name__ == "__main__":

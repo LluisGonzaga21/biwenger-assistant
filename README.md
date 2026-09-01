@@ -1,45 +1,46 @@
-# Análisis Biwenger
+# Biwenger Analysis
 
-Herramientas en Python para analizar tu liga de [Biwenger](https://biwenger.as.com/) (fútbol fantasy) más allá de lo que ofrece la app: ratios de rendimiento por precio, un "estado de forma" ponderado por partidos recientes, estimación de valor justo de mercado (chollos/sobreprecios), sugerencias de fichajes y ventas con explicación de a quién sustituyen, y hasta ejecutar pujas/clausulazos directamente desde código (en modo seguro, sin sorpresas).
+Python tools to analyze your [Biwenger](https://biwenger.as.com/) (fantasy football) league beyond what the app shows you: performance-per-price ratios, a "form" score weighted by recent matches, fair market value estimation (bargains/overpriced players), buy/sell suggestions that tell you exactly who they'd replace, and even placing bids/clause buyouts straight from code (in a safe, no-surprises mode).
 
-Todo se construye a partir de la **API no oficial de Biwenger** (no hay documentación pública), inspeccionando respuestas reales. Si Biwenger cambia algo, es el sitio por el que empezar a mirar — ver [Cómo funciona por dentro](#cómo-funciona-por-dentro).
+Everything is built on top of the **unofficial Biwenger API** (there's no public documentation), by inspecting real responses. If Biwenger changes something, this is the first place to look — see [How it works under the hood](#how-it-works-under-the-hood).
 
-> ⚠️ Este es un proyecto personal, no afiliado a Biwenger/AS.com. Úsalo bajo tu responsabilidad: es una API no documentada y puede romperse si Biwenger cambia su backend. La parte de "operaciones" (pujar/clausular) mueve dinero real de tu equipo — lee la sección de [seguridad](#seguridad-al-pujarclausular) antes de usarla.
+> ⚠️ This is a personal project, not affiliated with Biwenger/AS.com. Use at your own risk: it's an undocumented API and can break if Biwenger changes its backend. The "operations" part (bidding/clause buyouts) moves real money in your team — read the [safety](#safety-when-biddingbuying-out-a-clause) section before using it.
 
-## Índice
+## Table of contents
 
-- [¿Qué hace exactamente?](#qué-hace-exactamente)
-- [Instalación](#instalación)
-- [Configuración](#configuración)
-- [Guía rápida](#guía-rápida)
-- [El notebook, sección a sección](#el-notebook-sección-a-sección)
-- [El DataFrame: columnas explicadas](#el-dataframe-columnas-explicadas)
-- [Referencia de funciones](#referencia-de-funciones-biwenger_helperspy)
-- [Seguridad al pujar/clausular](#seguridad-al-pujarclausular)
-- [Cómo funciona por dentro](#cómo-funciona-por-dentro)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Solución de problemas](#solución-de-problemas)
+- [What does it actually do?](#what-does-it-actually-do)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Quick start](#quick-start)
+- [The notebook, section by section](#the-notebook-section-by-section)
+- [The DataFrame: columns explained](#the-dataframe-columns-explained)
+- [Function reference](#function-reference-biwenger_helperspy)
+- [Safety when bidding/buying out a clause](#safety-when-biddingbuying-out-a-clause)
+- [How it works under the hood](#how-it-works-under-the-hood)
+- [Project structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [Contact / contributing](#contact--contributing)
 
-## ¿Qué hace exactamente?
+## What does it actually do?
 
-Biwenger te enseña un jugador a la vez. Este proyecto descarga **todo** lo relevante de tu liga (mercado, plantilla de cada rival, detalle de cada jugador) y lo junta en una única tabla que puedes ordenar, filtrar y cruzar como quieras. A partir de ahí:
+Biwenger shows you one player at a time. This project downloads **everything** relevant to your league (the market, every rival's squad, the detail of every player involved) and merges it into a single table you can sort, filter and cross-reference however you want. From there:
 
-- **Ratios de rendimiento por precio**: puntos / valor de mercado, puntos / clausula (temporada actual y anterior), tanto en total como por partido.
-- **`Puntuación potencial`**: una métrica propia que mezcla la forma reciente (últimos partidos, ponderados — cuenta más el más reciente) con el rendimiento de la temporada pasada, para no fiarlo todo a una racha de 2 partidos.
-- **Valor justo de mercado**: para cada jugador en venta, estima si está barato o caro comparándolo con jugadores similares de tu propia liga (no un precio "oficial" externo).
-- **Cuánto ofertar**: combina tu valor justo estimado, cuántos rivales podrían pujar más que tú, y lo que se ha pagado de verdad por jugadores parecidos en tu liga — nunca sugiere pujar por debajo del precio pedido (Biwenger no lo permite).
-- **Sugerencia de fichajes**: compara cada candidato asequible (mercado o clausula) contra tu jugador más flojo, sin sesgo de "esta posición ya está cubierta" — mide mejora real y dice a quién sustituirías.
-- **Sugerencia de ventas**: quién de tu plantilla está sobrevalorado ahora mismo, cruzado con ofertas reales que ya has recibido.
-- **Gráficos**: chollos/sobrevalorados con outliers marcados, mejores/peores por posición, distribución de rendimiento.
-- **Caché resumible**: la descarga inicial (mercado + cada plantilla + detalle de cada jugador) puede tardar varios minutos por el límite de peticiones de la API. Se guarda en disco de forma incremental, así que si se corta a medias, la siguiente ejecución retoma solo lo que falta.
-- **Pujar/clausular de verdad**: en modo *dry-run* por defecto (solo te enseña qué se mandaría), con `confirm=True` explícito para ejecutar.
+- **Performance-per-price ratios**: points / market value, points / clause price (current and previous season), both in total and per match.
+- **`Puntuacion potencial` ("potential score")**: a custom metric that blends recent form (last matches, weighted — the most recent counts more) with last season's performance, so it doesn't put all its trust in a 2-match hot streak.
+- **Fair market value**: for every player on the market, estimates whether they're cheap or expensive by comparing them to similar players in your own league (not an external "official" price).
+- **How much to bid**: combines your estimated fair value, how many rivals could outbid you, and what's actually been paid for similar players in your league — never suggests bidding below the asking price (Biwenger doesn't allow that anyway).
+- **Signing suggestions**: compares every affordable candidate (market or clause) against your weakest player, with no "this position is already covered" bias — it measures real improvement and tells you exactly who you'd be replacing.
+- **Sell suggestions**: who in your squad is currently overvalued, cross-checked against real offers you've already received.
+- **Charts**: bargains/overvalued players with outliers labeled, best/worst by position, performance distribution.
+- **Resumable cache**: the initial download (market + every squad + every player's detail) can take several minutes because of the API's rate limit. It's saved to disk incrementally, so if it gets interrupted, the next run picks up only what's missing.
+- **Real bidding/clause buyouts**: dry-run by default (just shows you what would be sent), with an explicit `confirm=True` to actually execute it.
 
-## Instalación
+## Installation
 
-Necesitas **Python 3.10+**.
+You need **Python 3.10+**.
 
 ```bash
-git clone <la-url-de-tu-fork>
+git clone <your-fork-url>
 cd biwenger-analisis
 python -m venv .venv
 
@@ -51,255 +52,263 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configuración
+## Configuration
 
-Copia el fichero de ejemplo y rellena tus credenciales:
+Copy the example file and fill in your credentials:
 
 ```bash
 copy .env.example .env      # Windows
 cp .env.example .env        # macOS / Linux
 ```
 
-Abre `.env` con un editor de texto:
+Open `.env` in a text editor:
 
 ```env
-BIWENGER_EMAIL=tu_email@ejemplo.com
-BIWENGER_PASSWORD=tu_contraseña
+BIWENGER_EMAIL=your_email@example.com
+BIWENGER_PASSWORD=your_password
 
-# Opcional: solo hace falta si tu cuenta esta en varias ligas
+# Optional: only needed if your account is in several leagues
 BIWENGER_LEAGUE_ID=
 
-# Opcional: solo hace falta si el auto-detect no encuentra cual eres tu
+# Optional: only needed if auto-detect can't figure out which team is yours
 BIWENGER_OWN_TEAM_ID=
 ```
 
-`.env` está en `.gitignore` — **nunca se sube a ningún sitio**, se queda solo en tu máquina. El login se hace en cada ejecución porque el token de sesión de Biwenger caduca.
+`.env` is in `.gitignore` — **it's never uploaded anywhere**, it stays only on your machine. Login happens on every run because Biwenger's session token expires.
 
-## Guía rápida
+## Quick start
 
-### Opción 1: el notebook interactivo (recomendado)
-
-```bash
-python 01_explorar_api.py   # valida que el login y la liga funcionan (una vez, o si algo falla)
-```
-
-Abre `03_analisis.ipynb` en VS Code o Jupyter, selecciona el intérprete de `.venv` como kernel, y ejecuta las celdas de arriba a abajo. La primera carga de datos tarda unos minutos (ver [caché resumible](#cómo-funciona-por-dentro)); a partir de ahí es instantánea.
-
-### Opción 2: Excel estático
+### Option 1: the interactive notebook (recommended)
 
 ```bash
-python 02_generar_excel.py            # usa la cache si ya existe
-python 02_generar_excel.py --refresh  # fuerza descarga completa
+python 01_explorar_api.py   # confirms login and league detection work (run once, or if something breaks)
 ```
 
-Genera `output/analisis_biwenger_<fecha>.xlsx` con tres hojas (Mercado, Rivales, Mi equipo), columnas fijadas y formato condicional (rojo→amarillo→verde) sobre los ratios. Rápido de compartir o imprimir, pero sin gráficos ni recomendaciones — para eso usa el notebook. Comparte la misma caché que el notebook, así que si ya cargaste datos desde uno de los dos, el otro los reutiliza al instante.
+Open `03_analisis.ipynb` in VS Code or Jupyter, select the `.venv` interpreter as the kernel, and run the cells top to bottom. The first data load takes a few minutes (see [resumable cache](#how-it-works-under-the-hood)); after that it's instant.
 
-## El notebook, sección a sección
+### Option 2: static Excel export
 
-### 1. Cargar datos
+```bash
+python 02_generar_excel.py            # uses the cache if it already exists
+python 02_generar_excel.py --refresh  # forces a full re-download
+```
+
+Generates `output/analisis_biwenger_<date>.xlsx` with three sheets (Market, Rivals, My team), frozen columns and conditional formatting (red→yellow→green) on the ratios. Quick to share or print, but no charts or recommendations — use the notebook for that. It shares the same cache as the notebook, so if you already loaded data from one of the two, the other reuses it instantly.
+
+## The notebook, section by section
+
+### 1. Load data
 
 ```python
-data = biwenger_helpers.cargar_datos_liga(
+data = biwenger_helpers.load_league_data(
     EMAIL, PASSWORD, league_id=LEAGUE_ID, own_team_id=OWN_TEAM_ID,
     forzar_refresco=False, parar_en_primer_limite=True,
 )
 ```
 
-La primera vez descarga mercado + plantillas de todos los managers + detalle de cada jugador implicado, y lo guarda en `output/cache/*.json`. Es **resumible**: con `parar_en_primer_limite=True` la carga se para sola en cuanto la API corta por exceso de peticiones (en vez de quedarse esperando en pausas largas), y la siguiente vez que ejecutes la celda retoma solo lo que falte. Si la caché tiene más de 24h (`max_antiguedad_horas`) se refresca sola.
+The first run downloads the market + every manager's squad + the detail of every player involved, and saves it to `output/cache/*.json`. It's **resumable**: with `parar_en_primer_limite=True` the load stops itself as soon as the API cuts off due to too many requests (instead of sitting through long backoff pauses), and the next time you run the cell it picks up only what's missing. If the cache is older than 24h (`max_antiguedad_horas`) it refreshes itself automatically.
 
-### 2. Explorar
+### 2. Explore
 
-`df` es una fila por jugador — mercado + cada rival + tu equipo — con la columna `Origen` para filtrar. Ejemplos:
+`df` has one row per player — market + every rival + your own team — with the `Origen` ("source") column to filter by. Examples:
 
 ```python
-# Top 20 gangas del mercado por ratio puntos/valor de mercado
+# Top 20 market bargains by points/market-value ratio
 df[df["Origen"] == "Mercado"].dropna(subset=["Ratio pts/VM (actual)"]) \
     .sort_values("Ratio pts/VM (actual)", ascending=False).head(20)
 
-# Tu plantilla ordenada por rendimiento (para ver tus jugadores más flojos)
+# Your squad sorted by performance (to spot your weakest players)
 df[df["Origen"] == "Mi equipo"].sort_values("Puntuacion potencial")
 
-# Mejores clausulas de rivales por ratio puntos/clausula
+# Best rival clause buyouts by points/clause ratio
 df[df["Origen"].str.startswith("Rival:")] \
     .dropna(subset=["Ratio pts totales/clausula (actual)"]) \
     .sort_values("Ratio pts totales/clausula (actual)", ascending=False).head(20)
 ```
 
-**Importante sobre `Origen`**: `'Mercado'` significa jugador *libre de verdad* (sin dueño, comprable directo pujando). Las entradas del mercado que sí tienen dueño (alguien puso a su jugador en venta) **no** cuentan como `'Mercado'` — la única vía real de ficharlos es el clausulazo, así que aparecen como `'Rival: <nombre>'` con su columna `Clausula`. Además, mercado/rivales ya excluyen "morralla" automáticamente (sin equipo de 1ª, valor ≤ 400.000€, o inactivos); tu propio equipo nunca se filtra.
+**Important note about `Origen`**: `'Mercado'` means a *genuinely free* player (no owner, directly biddable). Market entries that DO have an owner (someone listed their own player for sale) do **not** count as `'Mercado'` — the only real way to sign them is a clause buyout, so they show up as `'Rival: <name>'` with their `Clausula` column filled in. On top of that, market/rivals already exclude "clutter" automatically (no top-flight team, value ≤ €400,000, or inactive players); your own squad is never filtered.
 
-### 3. Gráficos
+### 3. Charts
 
-- **Top 20 por ratio pts/VM** (barras horizontales).
-- **Distribución del ratio por posición** (boxplot).
-- **Valor vs. rendimiento**: scatter con línea de tendencia; los 8 jugadores que más se desvían por arriba (chollos) y por abajo (sobrevalorados) salen rotulados con su nombre.
-- **Mejores y peores 5 por posición**: cuatro paneles (Portero/Defensa/Centrocampista/Delantero), verde arriba y rojo abajo.
+- **Top 20 by points/market-value ratio** (horizontal bar chart).
+- **Ratio distribution by position** (boxplot).
+- **Value vs. performance**: scatter plot with a trend line; the 8 players that deviate the most above (bargains) and below (overvalued) the trend are labeled with their name.
+- **Best and worst 5 per position**: four panels (Goalkeeper/Defender/Midfielder/Forward), green on top, red on the bottom.
 
-### 4. Sugerencia de fichajes
+### 4. Signing suggestions
 
 ```python
-biwenger_helpers.sugerir_fichajes(df, data["balance"], top_n=15)
+biwenger_helpers.suggest_signings(df, data["balance"], top_n=15)
 
-# Priorizando eficiencia (mejora por millón) en vez de mejora absoluta
-biwenger_helpers.sugerir_fichajes(df, data["balance"], top_n=15, ordenar_por="eficiencia")
+# Prioritizing efficiency (improvement per million) instead of raw improvement
+biwenger_helpers.suggest_signings(df, data["balance"], top_n=15, ordenar_por="eficiencia")
 ```
 
-Compara cada candidato asequible y disponible contra tu jugador más flojo **de esa misma posición**, y solo muestra candidatos que realmente mejorarían a ese jugador. No mete ningún sesgo de "esta línea ya está cubierta" — mide mejora real y te dice explícitamente a quién sustituirías (columna `Jugador que reemplazarías`). Descarta automáticamente clausulas bloqueadas temporalmente tras una compra reciente.
+Compares every affordable, available candidate against your weakest player **in that same position**, and only shows candidates that would actually improve on that player. It doesn't apply any "this line is already covered" bias — it measures real improvement and explicitly tells you who you'd be replacing (`Jugador que reemplazarías` column). Clauses that are temporarily locked after a recent purchase are automatically excluded.
 
-Columnas clave: `Saldo tras fichar`, `Jugadores flojos en tu posicion` / `Total en tu posicion` (cuántos de los tuyos rinden por debajo de tu propia mediana ahí), `Mejora por millon gastado`.
+Key columns: `Saldo tras fichar` (balance after signing), `Jugadores flojos en tu posicion` / `Total en tu posicion` (how many of your players in that position perform below your own median there), `Mejora por millon gastado` (improvement per million spent).
 
-> 💡 Es una sugerencia orientativa a partir del `balance` que le pases — no tiene en cuenta el `maximumBid` real de Biwenger (que puede ser bastante mayor que tu saldo, ya que Biwenger permite pujar en descubierto usando el valor de tu plantilla como colateral). Si quieres usar tu límite real de puja, pásalo tú mismo en vez de `data["balance"]`.
+> 💡 This is a rough suggestion based on the `balance` you pass in — it doesn't account for Biwenger's real `maximumBid` (which can be significantly higher than your balance, since Biwenger lets you bid into the red using your squad's value as collateral). If you want to use your real bidding limit, pass it in yourself instead of `data["balance"]`.
 
-### 5. Ranking general
+### 5. General ranking
 
 ```python
-biwenger_helpers.mejores_jugadores(df, top_n=20)                                    # top 20 general
-biwenger_helpers.mejores_jugadores(df, posicion="Delantero", origen="Mercado")       # filtrado
+biwenger_helpers.best_players(df, top_n=20)                                    # top 20 overall
+biwenger_helpers.best_players(df, posicion="Delantero", origen="Mercado")       # filtered
 ```
 
-Una watchlist de quién está rindiendo mejor ahora mismo (por `Puntuacion potencial`), sin mirar precio ni si te lo puedes permitir. Excluye lesionados/sancionados por defecto.
+A watchlist of who's performing best right now (by `Puntuacion potencial`), regardless of price or whether you can afford them. Excludes injured/suspended players by default.
 
-### 6. Valor justo de mercado
+### 6. Fair market value
 
 ```python
-valor_justo = biwenger_helpers.estimar_valor_justo(df, margen_pct=20)
+valor_justo = biwenger_helpers.estimate_fair_value(df, margen_pct=20)
 valor_justo[valor_justo["Valoracion"] == "Chollo"]
 
-# Cuánto ofertar por un jugador libre del mercado
-biwenger_helpers.sugerir_oferta_mercado(df, data)
+# How much to bid for a genuinely free market player
+biwenger_helpers.suggest_market_offer(df, data)
 ```
 
-Para cada jugador en venta, `estimar_valor_justo` calcula la mediana de rendimiento/precio de jugadores similares de tu liga (misma posición) y la usa de referencia para etiquetar Chollo/Caro/En la media.
+For every player on the market, `estimate_fair_value` calculates the median performance/price relationship of similar players in your league (same position) and uses it as a reference to label Bargain/Expensive/Fair.
 
-`sugerir_oferta_mercado` va un paso más allá y calcula cuánto haría falta ofertar de verdad para llevarte al jugador (no solo cuánto "vale" según tu heurística): combina el precio pedido (**suelo obligatorio** — Biwenger no deja pujar por debajo), lo que se ha pagado de verdad por jugadores comparables en tu liga, y cuántos rivales tienen presupuesto de sobra para pujar más que tú. Es orientativo — no sabe quién está *realmente* interesado en cada jugador, solo quién podría permitírselo económicamente; un rival puede pagar muy por encima de cualquier estimación razonable.
+`suggest_market_offer` goes a step further and estimates how much it would actually take to win the player (not just what they're "worth" by your heuristic): it combines the asking price (**mandatory floor** — Biwenger won't let you bid below it), what's genuinely been paid for comparable players in your league, and how many rivals have budget to spare to outbid you. It's a rough guide — it has no way of knowing who's *actually* interested in each player, only who could afford them; a rival can end up paying well above any reasonable estimate.
 
-### 7. Sugerencia de ventas
+### 7. Sell suggestions
 
 ```python
-ventas = biwenger_helpers.sugerir_ventas(df, data=data, margen_pct=20)
+ventas = biwenger_helpers.suggest_sales(df, data=data, margen_pct=20)
 ventas[ventas["Recomendacion"] == "Vender ahora"]
 ```
 
-El complementario de la sección 6 para tu plantilla: jugadores cuyo valor de mercado se ha disparado muy por encima de lo que su rendimiento real justificaría. Cruza también ofertas reales ya recibidas (filtrando las ofertas automáticas "Desconocido" que Biwenger genera para cada jugador tuyo, que no son demanda real).
+The counterpart to section 6 for your own squad: players whose market value has shot up well beyond what their actual performance would justify. It also cross-checks real offers you've already received (filtering out Biwenger's automatic "Unknown" instant-sell offers, which aren't real demand).
 
-### 8. Ofertas
-
-```python
-biwenger_helpers.ofertas(data, tipo="recibidas")
-biwenger_helpers.ofertas(data, tipo="enviadas")
-```
-
-Lista las ofertas de compra activas en el mercado sin tener que entrar en la app (no incluye aceptar/rechazar, eso se hace desde Biwenger).
-
-### 9. Historial
+### 8. Offers
 
 ```python
-biwenger_helpers.guardar_snapshot(data)          # guarda una copia fechada
-biwenger_helpers.listar_snapshots()
-biwenger_helpers.cargar_snapshot("20260828_120000")
+biwenger_helpers.offers(data, tipo="recibidas")
+biwenger_helpers.offers(data, tipo="enviadas")
 ```
 
-A diferencia de la caché (que se sobrescribe), `guardar_snapshot` guarda una copia con fecha en `output/history/`, útil para comparar la evolución de tu equipo o del mercado con el tiempo.
+Lists active buy offers in the market without having to open the app (doesn't include accepting/rejecting — that's still done in Biwenger).
 
-### 10. Operaciones (pujar / clausular)
+### 9. History
 
-Acciones reales sobre tu liga — ver la sección de [seguridad](#seguridad-al-pujarclausular) antes de tocar esto.
+```python
+biwenger_helpers.save_snapshot(data)          # saves a dated snapshot
+biwenger_helpers.list_snapshots()
+biwenger_helpers.load_snapshot("20260828_120000")
+```
+
+Unlike the cache (which gets overwritten), `save_snapshot` saves a dated copy under `output/history/`, useful for comparing how your team or the market evolves over time.
+
+### 10. Operations (bidding / clause buyouts)
+
+Real actions on your league — read the [safety](#safety-when-biddingbuying-out-a-clause) section before touching this.
 
 ```python
 cliente_operaciones = BiwengerClient(EMAIL, PASSWORD, league_id=LEAGUE_ID)
-biwenger_helpers.login_y_resolver_liga(cliente_operaciones, LEAGUE_ID)
+biwenger_helpers.login_and_resolve_league(cliente_operaciones, LEAGUE_ID)
 
-# 'Vendedor (id)' de las tablas de arriba es lo que va en 'to'
-cliente_operaciones.place_offer(player_id, importe, to=vendedor_id)                    # dry-run: solo imprime el payload
-cliente_operaciones.place_offer(player_id, importe, to=vendedor_id, confirm=True)      # ejecuta de verdad
+# 'Vendedor (id)' from the tables above is what goes into 'to'
+cliente_operaciones.place_offer(player_id, importe, to=vendedor_id)                    # dry-run: only prints the payload
+cliente_operaciones.place_offer(player_id, importe, to=vendedor_id, confirm=True)      # actually executes it
 ```
 
-## El DataFrame: columnas explicadas
+## The DataFrame: columns explained
 
-| Columna | Qué es |
+Column names are kept in Spanish (matching the live Biwenger data and the rest of the code); this table explains what each one means.
+
+| Column | What it is |
 |---|---|
-| `player_id` | ID interno de Biwenger para el jugador |
-| `Jugador`, `Posicion`, `Equipo LaLiga` | Datos básicos |
-| `Estado`, `Disponible` | `Disponible=False` si está lesionado/sancionado/descartado (`'doubt'` no cuenta como no disponible) |
-| `Valor de mercado` | Valor de mercado oficial actual, en euros |
-| `Tendencia precio (7d) %` | Variación del valor de mercado en los últimos 7 días |
-| `Temporada actual` / `anterior` | Etiqueta real de la temporada (p.ej. "Temporada 2025/2026"); el nombre de columna es siempre el mismo, calculado por mayoría entre todos los jugadores para no desalinear a quien no jugó recientemente |
-| `Puntos temporada actual` / `anterior` | Puntos totales acumulados |
-| `Partidos temporada actual` / `anterior` | Partidos jugados |
-| `Pts/partido (actual)` / `(anterior)` | Puntos totales ÷ partidos |
-| `Ratio pts/VM (actual)` / `(anterior)` | Puntos totales ÷ valor de mercado (en millones) |
-| `Forma (ult. partidos)` | Media ponderada de los últimos partidos, dando más peso a los más recientes (decay exponencial) |
-| `Puntuacion potencial` | `Forma` (70%) + puntos/partido de la temporada anterior (30%) — la métrica que usan los rankings y recomendadores |
-| `Proximo rival`, `Local/Visitante`, `Dificultad proximo partido`, `Jornada proxima` | Su siguiente partido de LaLiga |
-| `Origen` | `'Mercado'` (libre), `'Mi equipo'`, o `'Rival: <nombre>'` |
-| `Precio en mercado`, `Vendedor (id)` | Solo si `Origen == 'Mercado'` |
-| `Clausula`, `Clausula bloqueada hasta`, `Clausula disponible ahora` | Solo para jugadores de rivales/tuyos |
-| `Ratio pts totales/clausula` / `Ratio pts medios/clausula` (`actual`/`anterior`) | El mismo ratio de antes pero contra la clausula en vez del valor de mercado — por puntos totales o por puntos medios (un jugador con pocos partidos puede salir mal en el total pero bien en la media) |
+| `player_id` | Biwenger's internal ID for the player |
+| `Jugador`, `Posicion`, `Equipo LaLiga` | Name, position, LaLiga club |
+| `Estado`, `Disponible` | `Disponible=False` if injured/suspended/discarded (`'doubt'` does not count as unavailable) |
+| `Valor de mercado` | Current official market value, in euros |
+| `Tendencia precio (7d) %` | Market value change over the last 7 days |
+| `Temporada actual` / `anterior` | Real season label (e.g. "Temporada 2025/2026"); the column name is always the same, computed by majority vote across all players so it doesn't misalign for someone who hasn't played recently |
+| `Puntos temporada actual` / `anterior` | Total accumulated points |
+| `Partidos temporada actual` / `anterior` | Matches played |
+| `Pts/partido (actual)` / `(anterior)` | Total points ÷ matches |
+| `Ratio pts/VM (actual)` / `(anterior)` | Total points ÷ market value (in millions) |
+| `Forma (ult. partidos)` | Weighted average of the last few matches, weighting more recent ones higher (exponential decay) |
+| `Puntuacion potencial` | `Forma` (70%) + previous season's points per match (30%) — the metric used by the rankings and recommenders |
+| `Proximo rival`, `Local/Visitante`, `Dificultad proximo partido`, `Jornada proxima` | Their next LaLiga match |
+| `Origen` | `'Mercado'` (free agent), `'Mi equipo'` (your team), or `'Rival: <name>'` |
+| `Precio en mercado`, `Vendedor (id)` | Only when `Origen == 'Mercado'` |
+| `Clausula`, `Clausula bloqueada hasta`, `Clausula disponible ahora` | Only for rival/your own players |
+| `Ratio pts totales/clausula` / `Ratio pts medios/clausula` (`actual`/`anterior`) | Same ratio as above but against the clause price instead of market value — by total points or by points-per-match (a player with few matches played can look bad in the total but fine in the average) |
 
-## Referencia de funciones (`biwenger_helpers.py`)
+## Function reference (`biwenger_helpers.py`)
 
-### Carga y caché
+Function names are in English; their parameters stay in Spanish, matching the DataFrame columns they filter/compare against.
 
-| Función | Qué hace |
+### Loading and cache
+
+| Function | What it does |
 |---|---|
-| `cargar_datos_liga(email, password, league_id=None, own_team_id=None, forzar_refresco=False, max_antiguedad_horas=24, parar_en_primer_limite=False)` | Orquesta todo: login, mercado, plantillas, detalle de jugadores, caché resumible. Devuelve el dict `data` que usan el resto de funciones |
-| `construir_dataframe(data)` | Convierte `data` en el DataFrame combinado que se usa en todo el notebook |
-| `guardar_snapshot(data)` / `listar_snapshots()` / `cargar_snapshot(nombre)` | Histórico fechado en `output/history/` |
+| `load_league_data(email, password, league_id=None, own_team_id=None, forzar_refresco=False, max_antiguedad_horas=24, parar_en_primer_limite=False)` | Orchestrates everything: login, market, squads, player details, resumable cache. Returns the `data` dict used by every other function |
+| `build_dataframe(data)` | Turns `data` into the combined DataFrame used throughout the notebook |
+| `save_snapshot(data)` / `list_snapshots()` / `load_snapshot(nombre)` | Dated history under `output/history/` |
 
-### Análisis y recomendación
+### Analysis and recommendations
 
-| Función | Qué hace |
+| Function | What it does |
 |---|---|
-| `mejores_jugadores(df, posicion=None, origen=None, top_n=20, metrica="Puntuacion potencial", solo_disponibles=True)` | Ranking/watchlist filtrable |
-| `estimar_valor_justo(df, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True)` | Chollo/Caro/En la media para el mercado |
-| `sugerir_oferta_mercado(df, data, margen_sobre_pedido_pct=5, metrica="Puntuacion potencial", rango_comparables_pct=40)` | Cuánto ofertar por un jugador libre del mercado |
-| `sugerir_fichajes(df, balance, top_n=15, solo_disponibles=True, ordenar_por="mejora")` | Candidatos que mejoran a tu jugador más flojo de su posición (`ordenar_por="eficiencia"` para priorizar coste/beneficio) |
-| `sugerir_ventas(df, data=None, metrica="Puntuacion potencial", margen_pct=20)` | Jugadores tuyos sobrevalorados, cruzado con ofertas reales |
-| `coste_por_punto(df, metrica="Puntuacion potencial", margen_pct=20)` | Coste por punto de cada jugador frente a la mediana de TODO el juego (todas las posiciones), para saber si está caro/barato en términos absolutos |
-| `ofertas(data, tipo="recibidas", solo_identificadas=False)` | Ofertas de compra activas (`solo_identificadas=True` descarta las automáticas de Biwenger, que no son demanda real) |
+| `best_players(df, posicion=None, origen=None, top_n=20, metrica="Puntuacion potencial", solo_disponibles=True)` | Filterable ranking/watchlist |
+| `estimate_fair_value(df, metrica="Puntuacion potencial", margen_pct=20, solo_disponibles=True)` | Bargain/Expensive/Fair labeling for the market |
+| `suggest_market_offer(df, data, margen_sobre_pedido_pct=5, metrica="Puntuacion potencial", rango_comparables_pct=40)` | How much to bid for a genuinely free market player |
+| `suggest_signings(df, balance, top_n=15, solo_disponibles=True, ordenar_por="mejora")` | Candidates that improve on your weakest player in their position (`ordenar_por="eficiencia"` to prioritize cost/benefit instead) |
+| `suggest_sales(df, data=None, metrica="Puntuacion potencial", margen_pct=20)` | Your overvalued players, cross-checked against real offers |
+| `cost_per_point(df, metrica="Puntuacion potencial", margen_pct=20)` | Cost per point for every player against the median of the ENTIRE game (all positions combined), to see if they're cheap/expensive in absolute terms |
+| `offers(data, tipo="recibidas", solo_identificadas=False)` | Active buy offers (`solo_identificadas=True` drops Biwenger's automatic offers, which aren't real demand) |
 
-### Piezas internas (por si tocas algo)
+### Internal building blocks (in case you tweak something)
 
-| Función | Qué hace |
+| Function | What it does |
 |---|---|
-| `puntuacion_potencial(detalle, score_id, decay=0.85, n_partidos=6, peso_temporada_anterior=0.3, ...)` | La métrica base — ajusta aquí los pesos si quieres que pese más o menos la forma reciente |
-| `calcular_forma(detalle, score_id, decay=0.85, n_partidos=6)` | Media ponderada de los últimos N partidos |
-| `jugador_irrelevante(detalle, score_id, ...)` | El filtro de "morralla" (sin equipo de 1ª, valor bajo, inactivo) |
-| `temporada_liga_mas_comun(detalles)` | Detecta la temporada "actual" real por mayoría entre todos los jugadores, para no arrastrar temporadas antiguas de quien no ha debutado |
+| `potential_score(detalle, score_id, decay=0.85, n_partidos=6, peso_temporada_anterior=0.3, ...)` | The base metric — adjust the weights here if you want recent form to count for more or less |
+| `calculate_form(detalle, score_id, decay=0.85, n_partidos=6)` | Weighted average of the last N matches |
+| `is_irrelevant_player(detalle, score_id, ...)` | The "clutter" filter (no top-flight team, low value, inactive) |
+| `most_common_league_season(detalles)` | Detects the real "current" season by majority vote across all players, so it doesn't drag in stale seasons for someone who hasn't debuted yet |
 
-## Seguridad al pujar/clausular
+## Safety when bidding/buying out a clause
 
-`client.place_offer(...)` funciona en **modo dry-run por defecto**: sin `confirm=True` no se envía nada a Biwenger, solo se imprime el payload que se mandaría (jugador, importe, a quién). Repasa siempre ese payload antes de confirmar — pasar `confirm=True` ejecuta la oferta de verdad, gasta o compromete tu saldo, y **no se puede deshacer** desde aquí.
+`client.place_offer(...)` runs in **dry-run mode by default**: without `confirm=True` nothing is sent to Biwenger, it just prints the payload that would be sent (player, amount, to whom). Always double-check that payload before confirming — passing `confirm=True` actually executes the offer, spends or commits your balance, and **cannot be undone** from here.
 
-El campo `to` es el `user_id` del propietario actual del jugador (coincide con el `team_id` que ves en la clasificación). Para un jugador del mercado usa `client.find_market_seller(player_id)` o la columna `Vendedor (id)` de las tablas del notebook; para un clausulazo a un rival, usa directamente su `team_id`.
+The `to` field is the `user_id` of the player's current owner (matches the `team_id` you see in the standings). For a market player use `client.find_market_seller(player_id)` or the `Vendedor (id)` column from the notebook's tables; for a clause buyout on a rival, use their `team_id` directly.
 
-El tipo de oferta (`offer_type="purchase"` por defecto) está confirmado para pujas de mercado por varios clientes no oficiales de Biwenger, pero **no** para clausulazos a un rival — antes de confirmar un clausulazo por primera vez, compara el payload del dry-run con la petición real que ves en el DevTools del navegador al hacerlo desde biwenger.com.
+The offer type (`offer_type="purchase"` by default) is confirmed for market bids by several unofficial Biwenger clients, but is **not** confirmed for clause buyouts on a rival — before confirming a clause buyout for the first time, compare the dry-run payload against the real request you see in your browser's DevTools when doing it from biwenger.com.
 
-## Cómo funciona por dentro
+## How it works under the hood
 
-- **API no oficial**: se usa `biwenger.as.com/api/v2` (autenticado, para liga/mercado/plantillas/pujas) y `cf.biwenger.com/api/v2` (público, para el detalle de cada jugador). No hay documentación oficial; los nombres de campo están sacados de inspeccionar respuestas reales — si algo deja de funcionar, ejecuta `01_explorar_api.py` y compara `output/debug/*.json` con lo que espera `biwenger_helpers.py`.
-- **`x-user` es el ID de equipo, no de cuenta**: la API exige que la cabecera `x-user` sea tu id de equipo *dentro de esa liga* (`leagues[].user.id`), no el id de cuenta global del token de login. `resolve_league()` lo resuelve automáticamente.
-- **`cf.biwenger.com` rechaza cabeceras de sesión**: las peticiones de detalle de jugador anulan explícitamente `Authorization`/`x-league`/`x-user`, si no, responde 403.
-- **Límite de peticiones**: `cf.biwenger.com` corta alrededor de la petición ~200-211 de una tirada. No es una ventana corta que se resetee esperando (probamos una pausa preventiva de 5 minutos y el corte seguía saltando en el mismo punto) — es un tope de peticiones totales. La única forma real de evitarlo del todo es no repetir peticiones, de ahí la caché compartida y resumible: el detalle de cada jugador se guarda en cuanto se consigue, así que una carga interrumpida retoma solo lo que falta.
-- **`maximumBid` puede superar tu saldo**: Biwenger te deja pujar en descubierto usando el valor de tu plantilla como colateral. `sugerir_fichajes` usa el `balance` que le pases tal cual — si quieres tu límite real de puja, pásale `maximumBid` (de `standings`) en vez de `data["balance"]`.
-- **Puntos por sistema de puntuación**: cada partido trae los puntos desglosados por `scoreID` (distintas ligas pueden puntuar distinto). Todo el análisis usa automáticamente el `scoreID` de tu liga.
+- **Unofficial API**: uses `biwenger.as.com/api/v2` (authenticated, for league/market/squads/bids) and `cf.biwenger.com/api/v2` (public, for each player's detail). There's no official documentation; field names come from inspecting real responses — if something stops working, run `01_explorar_api.py` and compare `output/debug/*.json` against what `biwenger_helpers.py` expects.
+- **`x-user` is the team ID, not the account ID**: the API requires the `x-user` header to be your team ID *within that specific league* (`leagues[].user.id`), not the global account ID from the login token. `resolve_league()` resolves this automatically.
+- **`cf.biwenger.com` rejects session headers**: player-detail requests explicitly null out `Authorization`/`x-league`/`x-user` — otherwise it responds with a 403.
+- **Rate limit**: `cf.biwenger.com` cuts off around request ~200-211 of a single run. It's not a short window that resets if you wait it out (we tried a preemptive 5-minute pause and the cutoff still hit at the exact same point) — it's a cap on total requests. The only real way to avoid it entirely is to not repeat requests, hence the shared, resumable cache: each player's detail is saved as soon as it's fetched, so an interrupted load only picks up what's missing next time.
+- **`maximumBid` can exceed your balance**: Biwenger lets you bid into the red using your squad's value as collateral. `suggest_signings` uses whatever `balance` you pass it as-is — if you want your real bidding limit, pass it `maximumBid` (from `standings`) instead of `data["balance"]`.
+- **Points by scoring system**: every match report has points broken down by `scoreID` (different leagues can score differently). All analysis automatically uses your league's own `scoreID`.
 
-## Estructura del proyecto
+## Project structure
 
 ```
-biwenger_client.py      Cliente de la API: login, lectura, y escritura (pujar/clausular)
-biwenger_helpers.py     Toda la lógica de análisis y carga/caché de datos
-01_explorar_api.py      Diagnóstico: valida login/liga y vuelca respuestas reales a output/debug/
-02_generar_excel.py     Genera un Excel estático (mercado + rivales + tu equipo)
-03_analisis.ipynb       Notebook interactivo — la forma recomendada de usar esto día a día
-.env.example            Plantilla de credenciales (copia a .env, nunca se sube)
-output/                 Generado en local (caché, debug, Excel, snapshots) — en .gitignore
+biwenger_client.py      API client: login, reading data, and writing (bids/clause buyouts)
+biwenger_helpers.py     All the analysis logic and data loading/caching
+01_explorar_api.py      Diagnostics: confirms login/league works and dumps real responses to output/debug/
+02_generar_excel.py     Generates a static Excel export (market + rivals + your team)
+03_analisis.ipynb       Interactive notebook — the recommended day-to-day way to use this
+.env.example            Credentials template (copy to .env, never uploaded)
+output/                 Generated locally (cache, debug dumps, Excel, snapshots) — in .gitignore
 ```
 
-## Solución de problemas
+## Troubleshooting
 
-- **`401 Invalid email or password`**: revisa `.env`. Si tus credenciales son correctas y sigue fallando, puede ser un bloqueo temporal por demasiados logins seguidos — espera unos minutos.
-- **`400 X-League and X-User headers required` / `401 Invalid user`**: normalmente se resuelve solo con `resolve_league()` / `login_y_resolver_liga()`. Si tienes varias ligas, fija `BIWENGER_LEAGUE_ID` en `.env`.
-- **Avisos de "campo no encontrado"**: ejecuta `01_explorar_api.py`, mira el JSON real en `output/debug/`, y ajusta `CAMPOS_CANDIDATOS` en `biwenger_helpers.py`.
-- **La carga de datos se corta / va lenta**: es el límite de peticiones (ver [arriba](#cómo-funciona-por-dentro)) — no hay que hacer nada especial, vuelve a ejecutar la celda/script más tarde y retomará solo lo que falte.
-- **`ModuleNotFoundError`**: asegúrate de que el intérprete activo es el de `.venv` (`.venv\Scripts\python.exe` en Windows) y no un Python global.
-- **El notebook no refleja cambios en `biwenger_helpers.py`**: reinicia el kernel — Python cachea los módulos ya importados.
+- **`401 Invalid email or password`**: check `.env`. If your credentials are correct and it still fails, it might be a temporary lockout from too many logins in a row — wait a few minutes.
+- **`400 X-League and X-User headers required` / `401 Invalid user`**: usually resolved automatically by `resolve_league()` / `login_and_resolve_league()`. If you're in multiple leagues, set `BIWENGER_LEAGUE_ID` in `.env`.
+- **"Field not found" warnings**: run `01_explorar_api.py`, look at the real JSON under `output/debug/`, and adjust `CAMPOS_CANDIDATOS` in `biwenger_helpers.py`.
+- **Data loading cuts off / is slow**: that's the rate limit (see [above](#how-it-works-under-the-hood)) — nothing special to do, just re-run the cell/script later and it'll resume from where it left off.
+- **`ModuleNotFoundError`**: make sure the active interpreter is the one in `.venv` (`.venv\Scripts\python.exe` on Windows), not a global Python install.
+- **The notebook isn't picking up changes to `biwenger_helpers.py`**: restart the kernel — Python caches modules that are already imported.
+
+## Contact / contributing
+
+This started as a personal project, but issues, pull requests and suggestions are welcome. If you run into a bug, have an idea, or just want to ask something about how it works, reach out: **lluis.gonzaga@marbill.com**.
