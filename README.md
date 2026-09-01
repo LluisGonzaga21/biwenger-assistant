@@ -1,4 +1,4 @@
-# Biwenger Analysis
+# Biwenger Assistant
 
 Python tools to analyze your [Biwenger](https://biwenger.as.com/) (fantasy football) league beyond what the app shows you: performance-per-price ratios, a "form" score weighted by recent matches, fair market value estimation (bargains/overpriced players), buy/sell suggestions that tell you exactly who they'd replace, and even placing bids/clause buyouts straight from code (in a safe, no-surprises mode).
 
@@ -41,7 +41,7 @@ You need **Python 3.10+**.
 
 ```bash
 git clone <your-fork-url>
-cd biwenger-analisis
+cd biwenger-assistant
 python -m venv .venv
 
 # Windows
