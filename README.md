@@ -311,4 +311,4 @@ output/                 Generated locally (cache, debug dumps, Excel, snapshots)
 
 ## Contact / contributing
 
-This started as a personal project, but issues, pull requests and suggestions are welcome. If you run into a bug, have an idea, or just want to ask something about how it works, reach out: **lluis.gonzaga@marbill.com**.
+This started as a personal project, but issues, pull requests and suggestions are welcome. If you run into a bug, have an idea, or just want to ask something about how it works, reach out: **lluisgonzaga21@gmail.com**.
