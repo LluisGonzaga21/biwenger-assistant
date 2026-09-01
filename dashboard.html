@@ -1,0 +1,635 @@
+<meta charset="utf-8">
+<title>Biwenger Assistant</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --paper:      #f5f4ee;
+    --surface:    #fbfaf5;
+    --surface-2:  #ffffff;
+    --ink:        #14170f;
+    --ink-2:      #4d5045;
+    --ink-3:      #868a7a;
+    --line:       #dcdbd0;
+    --line-2:     #cbcabb;
+    --accent:     #1f6b3f;
+    --accent-ink: #0f3d22;
+    --accent-soft: #e4ede6;
+    --gold:       #a9761f;
+    --gold-soft:  #f3e7cf;
+
+    --def:        #2a78d6;
+    --mid:        #1baf7a;
+    --fwd:        #eb6834;
+    --gk:         #14170f;
+
+    --good:       #0ca30c;
+    --critical:   #d03b3b;
+
+    --shadow: 0 1px 2px rgba(20,23,15,0.04), 0 8px 24px -12px rgba(20,23,15,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper:      #0e100b;
+      --surface:    #171a12;
+      --surface-2:  #1d2117;
+      --ink:        #f2f1e8;
+      --ink-2:      #c3c6b6;
+      --ink-3:      #8b8f7e;
+      --line:       #2b2f22;
+      --line-2:     #363b29;
+      --accent:     #4fae7c;
+      --accent-ink: #bfe6cf;
+      --accent-soft: #1c2b1f;
+      --gold:       #d9ac52;
+      --gold-soft:  #2c2513;
+
+      --def:        #3987e5;
+      --mid:        #199e70;
+      --fwd:        #d95926;
+      --gk:         #f2f1e8;
+
+      --good:       #2fbf4a;
+      --critical:   #e66767;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper:      #0e100b;
+    --surface:    #171a12;
+    --surface-2:  #1d2117;
+    --ink:        #f2f1e8;
+    --ink-2:      #c3c6b6;
+    --ink-3:      #8b8f7e;
+    --line:       #2b2f22;
+    --line-2:     #363b29;
+    --accent:     #4fae7c;
+    --accent-ink: #bfe6cf;
+    --accent-soft: #1c2b1f;
+    --gold:       #d9ac52;
+    --gold-soft:  #2c2513;
+
+    --def:        #3987e5;
+    --mid:        #199e70;
+    --fwd:        #d95926;
+    --gk:         #f2f1e8;
+
+    --good:       #2fbf4a;
+    --critical:   #e66767;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+  h1, h2, h3, .display {
+    font-family: "Archivo", system-ui, sans-serif;
+    font-weight: 800;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: "Archivo"; font-weight: 800; font-size: 17px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--accent); color: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 900;
+  }
+  .gh-link {
+    display: flex; align-items: center; gap: 8px;
+    font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 500;
+    color: var(--ink-2); text-decoration: none;
+    border: 1px solid var(--line-2); border-radius: 100px;
+    padding: 7px 14px 7px 12px;
+    transition: border-color .15s, color .15s;
+  }
+  .gh-link:hover { color: var(--ink); border-color: var(--ink-3); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 40px 0 30px; }
+  .hero h1 { font-size: clamp(38px, 5.4vw, 66px); line-height: 1.02; }
+  .hero .accent-word { color: var(--accent); }
+  .hero p.tagline {
+    max-width: 620px; font-size: 19px; color: var(--ink-2);
+    margin: 18px 0 0; line-height: 1.5;
+  }
+  .hero-foot {
+    display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--ink); color: var(--paper);
+    font-family: "Archivo"; font-weight: 700; font-size: 14.5px;
+    padding: 12px 20px; border-radius: 9px; text-decoration: none;
+    box-shadow: var(--shadow);
+  }
+  .unofficial-note { font-size: 13px; color: var(--ink-3); }
+
+  /* ---------- stat strip ---------- */
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line);
+    border-radius: 14px; overflow: hidden; margin-top: 34px;
+  }
+  .stat { background: var(--surface); padding: 20px 22px; }
+  .stat .n {
+    font-family: "JetBrains Mono", monospace; font-weight: 700;
+    font-size: clamp(24px, 2.6vw, 32px); color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n .unit { font-size: 0.55em; color: var(--ink-3); font-weight: 500; margin-left: 2px; }
+  .stat .label { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+
+  /* ---------- sections ---------- */
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 28px; flex-wrap: wrap; }
+  .section-head h2 { font-size: clamp(24px, 3vw, 32px); }
+  .section-head p { color: var(--ink-2); max-width: 480px; font-size: 15px; margin: 8px 0 0; }
+
+  /* ---------- chart card ---------- */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 28px 28px 20px; box-shadow: var(--shadow);
+  }
+  .chart-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; }
+  .view-toggle { display: flex; gap: 2px; background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; padding: 2px; }
+  .view-toggle button {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 6px; border: none; background: transparent; color: var(--ink-2); cursor: pointer;
+  }
+  .view-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  #scatter-wrap { position: relative; }
+  #scatter { width: 100%; height: auto; display: block; }
+  .pt { cursor: pointer; }
+  .pt-ring { fill: none; stroke-width: 2px; opacity: 0; transition: opacity .12s; }
+  .pt:hover .pt-ring, .pt.flagged .pt-ring { opacity: 1; }
+  .tooltip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--ink); color: var(--paper); font-family: "JetBrains Mono", monospace;
+    font-size: 12px; padding: 8px 10px; border-radius: 8px; line-height: 1.5; white-space: nowrap;
+    box-shadow: var(--shadow); z-index: 5;
+  }
+  .tooltip .t-name { font-family: "Source Sans 3"; font-weight: 700; font-size: 13px; display:block; margin-bottom:2px; }
+  .axis-label { font-size: 12px; fill: var(--ink-3); font-family: "JetBrains Mono", monospace; }
+  .gridline { stroke: var(--line); stroke-width: 1px; }
+  .baseline { stroke: var(--line-2); stroke-width: 1px; }
+  .trendline { stroke: var(--ink-3); stroke-width: 2px; stroke-dasharray: 3 5; fill: none; }
+  .outlier-label { font-family: "Source Sans 3"; font-weight: 700; font-size: 12.5px; }
+  .outlier-label.good { fill: var(--good); }
+  .outlier-label.bad { fill: var(--critical); }
+
+  .chart-caption { font-size: 13.5px; color: var(--ink-3); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.data-table th { text-align: left; font-family: "JetBrains Mono", monospace; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line-2); position: sticky; top: 0; background: var(--surface); }
+  table.data-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  table.data-table td.num { font-family: "JetBrains Mono", monospace; text-align: right; font-variant-numeric: tabular-nums; }
+  .table-scroll { max-height: 460px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .pos-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .pos-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+  /* ---------- two column ---------- */
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); }
+  .panel h3 { font-size: 17px; margin-bottom: 4px; }
+  .panel .sub { font-size: 13.5px; color: var(--ink-3); margin-bottom: 18px; }
+
+  .bargain-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 13px 0; border-bottom: 1px solid var(--line);
+  }
+  .bargain-row:last-child { border-bottom: none; }
+  .bargain-name { font-weight: 600; font-size: 14.5px; }
+  .bargain-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+  .bargain-pct {
+    font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 15px;
+    color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent);
+    padding: 4px 9px; border-radius: 7px;
+  }
+
+  .rank-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .rank-row:last-child { border-bottom: none; }
+  .rank-n { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--ink-3); width: 18px; flex: none; }
+  .rank-name { font-weight: 600; font-size: 14.5px; flex: 1; }
+  .rank-meta { font-size: 12px; color: var(--ink-3); }
+  .rank-score { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 14.5px; color: var(--ink); }
+
+  /* ---------- signing spotlight ---------- */
+  .spotlight {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .spotlight-main { padding: 30px; }
+  .spotlight-side { padding: 30px; background: var(--accent-soft); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+  .swap-row { display: flex; align-items: center; gap: 14px; margin: 18px 0; }
+  .swap-card { flex: 1; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px 16px; }
+  .swap-card .k { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-family: "JetBrains Mono", monospace; }
+  .swap-card .v { font-family: "Archivo"; font-weight: 700; font-size: 17px; margin-top: 3px; }
+  .swap-arrow { font-size: 20px; color: var(--accent); flex: none; }
+  .metric-line { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0; border-bottom: 1px dashed var(--line-2); }
+  .metric-line:last-child { border-bottom: none; }
+  .metric-line .v { font-family: "JetBrains Mono", monospace; font-weight: 700; }
+  .chip-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+  .chip {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; flex: 1; min-width: 190px;
+  }
+  .chip .p { font-weight: 700; font-size: 14px; }
+  .chip .r { color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+  .chip .m { font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700; margin-top: 6px; font-size: 13px; }
+
+  /* ---------- capability grid ---------- */
+  .caps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .cap { padding: 22px 0 0; border-top: 2px solid var(--accent); }
+  .cap h4 { font-family: "Archivo"; font-weight: 700; font-size: 15.5px; margin-bottom: 8px; }
+  .cap p { font-size: 13.5px; color: var(--ink-2); margin: 0; }
+
+  /* ---------- footer ---------- */
+  footer { padding: 44px 0 60px; }
+  .foot-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; }
+  .stack { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stack span {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-2);
+    border: 1px solid var(--line-2); border-radius: 100px; padding: 5px 11px;
+  }
+  .fineprint { font-size: 12.5px; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 20px; line-height: 1.7; }
+
+  @media (max-width: 860px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .cols2 { grid-template-columns: 1fr; }
+    .spotlight { grid-template-columns: 1fr; }
+    .spotlight-side { border-left: none; border-top: 1px solid var(--line); }
+    .caps { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .caps { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><span class="brand-mark">B</span> Biwenger Assistant</div>
+    <a class="gh-link" href="https://github.com/LluisGonzaga21/biwenger-assistant" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      github.com/LluisGonzaga21/biwenger-assistant
+    </a>
+  </div>
+
+  <div class="hero">
+    <span class="eyebrow">Fantasy football, run like a trading desk</span>
+    <h1 style="margin-top:10px">A Python assistant for<br><span class="accent-word">Biwenger</span>, built from scratch</h1>
+    <p class="tagline">Biwenger shows you one player at a time. This pulls the entire market, every rival squad and your own team into one dataset — then tells you who's a bargain, who's overpriced, and exactly who a signing would replace.</p>
+    <div class="hero-foot">
+      <a class="btn" href="https://github.com/LluisGonzaga21/biwenger-assistant" target="_blank" rel="noopener">View the source →</a>
+      <span class="unofficial-note">Built on an unofficial, reverse-engineered API · Python + pandas · dry-run-safe by default</span>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><div class="n">153<span class="unit">players</span></div><div class="label">Scouted this run — market, 13 rival squads &amp; my own</div></div>
+      <div class="stat"><div class="n">3<span class="unit">found</span></div><div class="label">Genuine market bargains flagged today</div></div>
+      <div class="stat"><div class="n">€672<span class="unit">K / pt</span></div><div class="label">League-wide cost-per-point baseline</div></div>
+      <div class="stat"><div class="n">€20.3<span class="unit">M</span></div><div class="label">My real bidding ceiling, computed from squad collateral</div></div>
+    </div>
+  </div>
+
+  <section id="chart-section">
+    <div class="section-head">
+      <div>
+        <h2>Value vs. performance</h2>
+        <p>Every scouted player, priced against a <span class="mono" style="font-size:13px">Potential score</span> blending recent form with last season. Above the line, they're outplaying their price.</p>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-toolbar">
+        <div class="legend" id="legend"></div>
+        <div class="view-toggle" role="group" aria-label="Chart view">
+          <button id="btn-chart" aria-pressed="true">Chart</button>
+          <button id="btn-table" aria-pressed="false">Table</button>
+        </div>
+      </div>
+      <div id="scatter-wrap">
+        <svg id="scatter" viewBox="0 0 1000 520" role="img" aria-label="Scatter plot of market value versus potential score for 150 players"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <div id="table-view" style="display:none">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Player</th><th>Position</th><th style="text-align:right">Market value</th><th style="text-align:right">Potential score</th><th style="text-align:right">vs. trend</th></tr></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-caption">Dashed line is the league's expected performance for a given price. Outlined points are the widest deviations — green above the line (bargains), red below (overpriced). Hover any point for details, or switch to the table for the full underlying data.</div>
+    </div>
+  </section>
+
+  <section id="findings">
+    <div class="section-head">
+      <div>
+        <h2>What the run turned up</h2>
+        <p>Two views on the same dataset: where the market is mispricing players, and who's simply performing best right now regardless of cost.</p>
+      </div>
+    </div>
+    <div class="cols2">
+      <div class="panel">
+        <h3>Market bargains found</h3>
+        <div class="sub">Priced well below what their <span class="mono" style="font-size:12.5px">Potential score</span> justifies, vs. similar players in the league</div>
+        <div id="bargains"></div>
+      </div>
+      <div class="panel">
+        <h3>Top potential score, league-wide</h3>
+        <div class="sub">Market, rivals and my own squad — ranked without looking at price</div>
+        <div id="ranking"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="spotlight-section">
+    <div class="section-head">
+      <div>
+        <h2>Not just "who's good" — who they replace</h2>
+        <p>Every signing suggestion is measured against your own weakest player at that position, with the exact swap spelled out.</p>
+      </div>
+    </div>
+    <div class="spotlight">
+      <div class="spotlight-main">
+        <span class="eyebrow">Top suggestion right now</span>
+        <div class="swap-row">
+          <div class="swap-card">
+            <div class="k">Sign</div>
+            <div class="v">Bartra</div>
+            <div class="r" style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Defender · Real Betis</div>
+          </div>
+          <div class="swap-arrow">→</div>
+          <div class="swap-card">
+            <div class="k">Replaces</div>
+            <div class="v">Kiko Femenía</div>
+            <div class="r" style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Your weakest defender right now</div>
+          </div>
+        </div>
+        <div class="metric-line"><span>Release clause</span><span class="v mono">€4.91M</span></div>
+        <div class="metric-line"><span>Estimated improvement</span><span class="v mono" style="color:var(--good)">+7.96 pts / match</span></div>
+        <div class="metric-line"><span>Balance after signing</span><span class="v mono">€15.4M</span></div>
+      </div>
+      <div class="spotlight-side">
+        <span class="eyebrow" style="color:var(--accent-ink)">Also surfaced this run</span>
+        <p style="font-size:13.5px;color:var(--ink-2);margin:0">The same logic runs across every position — not just the obvious upgrade, the cheapest real one.</p>
+      </div>
+    </div>
+    <div class="chip-row">
+      <div class="chip"><div class="p">Olasagasti</div><div class="r">Midfielder · replaces Ali Houary</div><div class="m">+6.65 pts/match · €5.21M</div></div>
+      <div class="chip"><div class="p">Bardeli</div><div class="r">Midfielder · replaces Ali Houary</div><div class="m">+6.31 pts/match · €2.86M</div></div>
+      <div class="chip"><div class="p">Valverde</div><div class="r">Midfielder · replaces Ali Houary</div><div class="m">+6.45 pts/match · €18.3M</div></div>
+    </div>
+  </section>
+
+  <section id="capabilities">
+    <div class="section-head">
+      <div>
+        <h2>What's actually under the hood</h2>
+      </div>
+    </div>
+    <div class="caps">
+      <div class="cap">
+        <h4>Fair-value estimation</h4>
+        <p>Compares every market listing against similar players in the same league to flag bargains and overpriced tags — not a generic price.</p>
+      </div>
+      <div class="cap">
+        <h4>Resumable data pipeline</h4>
+        <p>The API caps requests mid-download. Every player's detail is cached the moment it's fetched, so an interrupted run picks up exactly where it left off.</p>
+      </div>
+      <div class="cap">
+        <h4>Dry-run-safe by default</h4>
+        <p>Bids and clause buyouts print the exact payload first. Nothing touches your real balance until you explicitly confirm it.</p>
+      </div>
+      <div class="cap">
+        <h4>Bid-to-win, not bid-to-list</h4>
+        <p>Recommended offers factor in real comparable sale prices and rival budgets — never just the asking price.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot-top">
+      <div class="stack">
+        <span>Python 3.10+</span><span>pandas</span><span>matplotlib</span><span>Jupyter</span><span>requests</span>
+      </div>
+      <a class="btn" href="https://github.com/LluisGonzaga21/biwenger-assistant" target="_blank" rel="noopener">github.com/LluisGonzaga21/biwenger-assistant</a>
+    </div>
+    <div class="fineprint">
+      Personal project, not affiliated with Biwenger or AS.com — built entirely on an unofficial, undocumented API by inspecting real traffic. Figures on this page are a real run against my own league, captured on 2026-09-01. Questions or want to collaborate? lluisgonzaga21@gmail.com
+    </div>
+  </footer>
+</div>
+
+<script>
+const DATA = [{"Player":"David Soria","Position":"Goalkeeper","Market value":5790000,"Potential score":6.23},{"Player":"Eric García","Position":"Defender","Market value":8420000,"Potential score":7.16},{"Player":"Brahim","Position":"Forward","Market value":1970000,"Potential score":3.19},{"Player":"Kiko Femenía","Position":"Defender","Market value":980000,"Potential score":1.77},{"Player":"Berenguer","Position":"Forward","Market value":2320000,"Potential score":5.61},{"Player":"Yuri","Position":"Defender","Market value":2310000,"Potential score":1.43},{"Player":"Koke","Position":"Midfielder","Market value":3360000,"Potential score":5.71},{"Player":"Bartra","Position":"Defender","Market value":3200000,"Potential score":9.73},{"Player":"Iago Aspas","Position":"Forward","Market value":2850000,"Potential score":5.54},{"Player":"Jonny Castro","Position":"Defender","Market value":2140000,"Potential score":4.96},{"Player":"Rubén García","Position":"Midfielder","Market value":2810000,"Potential score":3.92},{"Player":"Antonio Blanco","Position":"Midfielder","Market value":3440000,"Potential score":4.04},{"Player":"Laporte","Position":"Defender","Market value":5250000,"Potential score":3.52},{"Player":"Diego Llorente","Position":"Defender","Market value":2130000,"Potential score":5.72},{"Player":"Denis Suárez","Position":"Midfielder","Market value":1380000,"Potential score":3.86},{"Player":"De Galarreta","Position":"Midfielder","Market value":2570000,"Potential score":4.75},{"Player":"Ryan","Position":"Goalkeeper","Market value":4360000,"Potential score":6.91},{"Player":"Mandi","Position":"Defender","Market value":2510000,"Potential score":5.71},{"Player":"Barrenetxea","Position":"Midfielder","Market value":4040000,"Potential score":4.86},{"Player":"Jutglà","Position":"Forward","Market value":3600000,"Potential score":2.98},{"Player":"Miguel Román","Position":"Midfielder","Market value":3480000,"Potential score":5.59},{"Player":"Einar Galilea","Position":"Defender","Market value":1360000,"Potential score":2.45},{"Player":"Mariano","Position":"Forward","Market value":3930000,"Potential score":7.38},{"Player":"Yeray","Position":"Defender","Market value":1710000,"Potential score":2.48},{"Player":"Villalibre","Position":"Forward","Market value":2170000,"Potential score":2.6},{"Player":"Soler","Position":"Midfielder","Market value":5220000,"Potential score":4.61},{"Player":"Remiro","Position":"Goalkeeper","Market value":4950000,"Potential score":7.52},{"Player":"Roro Riquelme","Position":"Midfielder","Market value":3790000,"Potential score":6.79},{"Player":"Enes Ünal","Position":"Forward","Market value":4610000,"Potential score":3.59},{"Player":"Dmitrovic","Position":"Goalkeeper","Market value":4770000,"Potential score":5.73},{"Player":"Valverde","Position":"Midfielder","Market value":11590000,"Potential score":6.75},{"Player":"Sivera","Position":"Goalkeeper","Market value":4320000,"Potential score":5.72},{"Player":"Djené","Position":"Defender","Market value":2190000,"Potential score":2.38},{"Player":"Unai Núñez","Position":"Defender","Market value":2950000,"Potential score":4.4},{"Player":"Arguibide","Position":"Defender","Market value":1300000,"Potential score":3.37},{"Player":"Pepelu","Position":"Midfielder","Market value":3240000,"Potential score":4.33},{"Player":"Leo Román","Position":"Goalkeeper","Market value":5550000,"Potential score":5.99},{"Player":"Pablo Ibáñez","Position":"Midfielder","Market value":2040000,"Potential score":3.88},{"Player":"Joan García","Position":"Goalkeeper","Market value":9690000,"Potential score":4.59},{"Player":"Diakhaby","Position":"Defender","Market value":1060000,"Potential score":2.34},{"Player":"Vinícius Jr","Position":"Forward","Market value":17560000,"Potential score":8.63},{"Player":"Courtois","Position":"Goalkeeper","Market value":6570000,"Potential score":3.52},{"Player":"Sancet","Position":"Midfielder","Market value":5740000,"Potential score":2.78},{"Player":"Yangel Herrera","Position":"Midfielder","Market value":2320000,"Potential score":3.02},{"Player":"Rioja","Position":"Forward","Market value":1950000,"Potential score":2.18},{"Player":"Kang-in Lee","Position":"Midfielder","Market value":8330000,"Potential score":7.59},{"Player":"Catena","Position":"Defender","Market value":3860000,"Potential score":6.07},{"Player":"Iker Muñoz","Position":"Midfielder","Market value":1390000,"Potential score":3.4},{"Player":"Raul García","Position":"Forward","Market value":1140000,"Potential score":4.11},{"Player":"De Frutos","Position":"Forward","Market value":5210000,"Potential score":3.36},{"Player":"Joaquín Muñoz","Position":"Forward","Market value":2080000,"Potential score":2.28},{"Player":"Koundé","Position":"Defender","Market value":4180000,"Potential score":3.12},{"Player":"Agirrezabala","Position":"Goalkeeper","Market value":3250000,"Potential score":3.77},{"Player":"Sergio Gómez","Position":"Defender","Market value":3420000,"Potential score":3.32},{"Player":"Pedri","Position":"Midfielder","Market value":15200000,"Potential score":6.35},{"Player":"Mbappé","Position":"Forward","Market value":24750000,"Potential score":12.95},{"Player":"Natan","Position":"Defender","Market value":3150000,"Potential score":4.69},{"Player":"Osambela","Position":"Midfielder","Market value":150000,"Potential score":3.48},{"Player":"Expósito","Position":"Midfielder","Market value":5080000,"Potential score":4.35},{"Player":"Nico Williams","Position":"Forward","Market value":8140000,"Potential score":3.1},{"Player":"Tete Morente","Position":"Forward","Market value":500000,"Potential score":3.21},{"Player":"Dani Cárdenas","Position":"Goalkeeper","Market value":1720000,"Potential score":3.31},{"Player":"Nteka","Position":"Forward","Market value":490000,"Potential score":2.57},{"Player":"Danjuma","Position":"Forward","Market value":2000000,"Potential score":4.11},{"Player":"Jesús Vázquez","Position":"Defender","Market value":990000,"Potential score":2.33},{"Player":"Turrientes","Position":"Midfielder","Market value":1670000,"Potential score":3.94},{"Player":"Ez Abde","Position":"Forward","Market value":7760000,"Potential score":4.34},{"Player":"Javi Hernández","Position":"Midfielder","Market value":3310000,"Potential score":4.4},{"Player":"Tenaglia","Position":"Defender","Market value":4360000,"Potential score":6.58},{"Player":"Pubill","Position":"Defender","Market value":6300000,"Potential score":7.68},{"Player":"Gonzalo Villar","Position":"Midfielder","Market value":2940000,"Potential score":4.06},{"Player":"Aubameyang","Position":"Forward","Market value":10090000,"Potential score":10.4},{"Player":"Terrats","Position":"Midfielder","Market value":3720000,"Potential score":4.4},{"Player":"Andrés García","Position":"Defender","Market value":2060000,"Potential score":4.09},{"Player":"Yamal","Position":"Forward","Market value":21020000,"Potential score":11.09},{"Player":"Tárrega","Position":"Defender","Market value":2370000,"Potential score":3.51},{"Player":"Luiz Felipe","Position":"Defender","Market value":150000,"Potential score":3.1},{"Player":"Swedberg","Position":"Midfielder","Market value":2380000,"Potential score":3.82},{"Player":"Raphinha","Position":"Forward","Market value":17950000,"Potential score":14.95},{"Player":"André Almeida","Position":"Midfielder","Market value":520000,"Potential score":4.09},{"Player":"Paredes","Position":"Defender","Market value":1880000,"Potential score":7.35},{"Player":"Marcos Alonso","Position":"Defender","Market value":3620000,"Potential score":3.79},{"Player":"El Hilali","Position":"Defender","Market value":2460000,"Potential score":3.76},{"Player":"Barrios","Position":"Midfielder","Market value":7270000,"Potential score":6.48},{"Player":"Olasagasti","Position":"Midfielder","Market value":2520000,"Potential score":6.95},{"Player":"Pape Gueye","Position":"Midfielder","Market value":8770000,"Potential score":6.47},{"Player":"Bellingham","Position":"Midfielder","Market value":17130000,"Potential score":12.31},{"Player":"Álvaro Valles","Position":"Goalkeeper","Market value":4450000,"Potential score":7.12},{"Player":"Abde Rebbach","Position":"Forward","Market value":1370000,"Potential score":3.01},{"Player":"Giuliano Simeone","Position":"Midfielder","Market value":6010000,"Potential score":5.33},{"Player":"Dotor","Position":"Midfielder","Market value":2790000,"Potential score":5.45},{"Player":"Fermín","Position":"Midfielder","Market value":13150000,"Potential score":10.14},{"Player":"Álvaro Carreras","Position":"Defender","Market value":1160000,"Potential score":3.17},{"Player":"Agoumé","Position":"Midfielder","Market value":3320000,"Potential score":4.45},{"Player":"Ejuke","Position":"Forward","Market value":2280000,"Potential score":6.03},{"Player":"Bretones","Position":"Defender","Market value":1630000,"Potential score":3.9},{"Player":"Gerard Martín","Position":"Defender","Market value":5230000,"Potential score":6.37},{"Player":"Peque","Position":"Forward","Market value":2730000,"Potential score":3.52},{"Player":"Peio Canales","Position":"Midfielder","Market value":2780000,"Potential score":2.62},{"Player":"Pablo Ramón","Position":"Defender","Market value":2170000,"Potential score":4.62},{"Player":"Pablo García","Position":"Forward","Market value":1060000,"Potential score":3.78},{"Player":"Antony","Position":"Forward","Market value":10810000,"Potential score":5.78},{"Player":"Deossa","Position":"Midfielder","Market value":1290000,"Potential score":4.05},{"Player":"Huijsen","Position":"Defender","Market value":5110000,"Potential score":5.69},{"Player":"Yusi Enríquez","Position":"Defender","Market value":1010000,"Potential score":4.6},{"Player":"Mendoza","Position":"Midfielder","Market value":960000,"Potential score":2.86},{"Player":"Oriol Rey","Position":"Midfielder","Market value":710000,"Potential score":3.36},{"Player":"De la Fuente","Position":"Defender","Market value":3340000,"Potential score":7.89},{"Player":"Hugo Rincón","Position":"Defender","Market value":710000,"Potential score":3.07},{"Player":"Gabriel Suazo","Position":"Defender","Market value":1850000,"Potential score":2.75},{"Player":"Hancko","Position":"Defender","Market value":4300000,"Potential score":6.24},{"Player":"Dolan","Position":"Forward","Market value":2980000,"Potential score":3.63},{"Player":"Neto","Position":"Midfielder","Market value":650000,"Potential score":2.32},{"Player":"Ali Houary","Position":"Midfielder","Market value":500000,"Potential score":0.3},{"Player":"Riedel","Position":"Defender","Market value":1410000,"Potential score":2.12},{"Player":"Mikautadze","Position":"Forward","Market value":10730000,"Potential score":4.8},{"Player":"Miguel Sierra","Position":"Forward","Market value":3220000,"Potential score":6.26},{"Player":"Carlos Maciá","Position":"Midfielder","Market value":900000,"Potential score":2.7},{"Player":"Thiago Fernández","Position":"Forward","Market value":1370000,"Potential score":3.81},{"Player":"Boselli","Position":"Defender","Market value":410000,"Potential score":1.69},{"Player":"Zaid Romero","Position":"Defender","Market value":3350000,"Potential score":4.47},{"Player":"Lucas Cepeda","Position":"Forward","Market value":480000,"Potential score":3.36},{"Player":"Ángel Pérez","Position":"Forward","Market value":3500000,"Potential score":5.21},{"Player":"Ville Koski","Position":"Defender","Market value":1700000,"Potential score":4.18},{"Player":"Xavi Espart","Position":"Defender","Market value":2810000,"Potential score":4.27},{"Player":"Mario Soriano","Position":"Midfielder","Market value":4340000,"Potential score":4.79},{"Player":"Villares","Position":"Midfielder","Market value":750000,"Potential score":3.54},{"Player":"Konaté","Position":"Defender","Market value":5860000,"Potential score":6.0},{"Player":"Rafa Rodríguez","Position":"Midfielder","Market value":510000,"Potential score":1.94},{"Player":"Rafael Garrido","Position":"Defender","Market value":1860000,"Potential score":2.45},{"Player":"Izan Merino","Position":"Midfielder","Market value":2150000,"Potential score":2.94},{"Player":"Gordon","Position":"Forward","Market value":10790000,"Potential score":7.51},{"Player":"Hernando","Position":"Defender","Market value":1490000,"Potential score":4.01},{"Player":"Mantilla","Position":"Defender","Market value":1390000,"Potential score":2.17},{"Player":"Jorge Salinas","Position":"Defender","Market value":3170000,"Potential score":3.16},{"Player":"Gustavo Puerta","Position":"Midfielder","Market value":3400000,"Potential score":5.46},{"Player":"Bardeli","Position":"Midfielder","Market value":1290000,"Potential score":6.61},{"Player":"Larrubia","Position":"Forward","Market value":5360000,"Potential score":4.21},{"Player":"Dani Lorenzo","Position":"Midfielder","Market value":3680000,"Potential score":5.54},{"Player":"Nico Guillén","Position":"Midfielder","Market value":930000,"Potential score":1.92},{"Player":"Buonanotte","Position":"Midfielder","Market value":1450000,"Potential score":1.54},{"Player":"Robbie Ure","Position":"Forward","Market value":4230000,"Potential score":1.24},{"Player":"Álex Calatrava","Position":"Midfielder","Market value":4680000,"Potential score":5.38},{"Player":"Dumfries","Position":"Defender","Market value":5690000,"Potential score":1.38},{"Player":"Facundo Bernal","Position":"Midfielder","Market value":2540000,"Potential score":3.94},{"Player":"Bright Ede","Position":"Defender","Market value":1230000,"Potential score":3.22},{"Player":"Amatucci","Position":"Midfielder","Market value":3460000,"Potential score":5.67},{"Player":"Morten Hjulmand","Position":"Midfielder","Market value":4580000,"Potential score":4.83},{"Player":"Adeyemi","Position":"Forward","Market value":8640000,"Potential score":4.59},{"Player":"Francho Serrano","Position":"Midfielder","Market value":1020000,"Potential score":2.46}];
+
+const POS_COLOR = { Goalkeeper: 'var(--gk)', Defender: 'var(--def)', Midfielder: 'var(--mid)', Forward: 'var(--fwd)' };
+const POS_ORDER = ['Defender', 'Midfielder', 'Forward', 'Goalkeeper'];
+const POS_SHAPE = { Goalkeeper: 'diamond', Defender: 'circle', Midfielder: 'circle', Forward: 'circle' };
+
+// ---- legend ----
+const legendEl = document.getElementById('legend');
+POS_ORDER.forEach(p => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<span class="legend-swatch" style="background:${POS_COLOR[p]}"></span>${p}`;
+  legendEl.appendChild(item);
+});
+['good','bad'].forEach(k => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  const color = k === 'good' ? 'var(--good)' : 'var(--critical)';
+  item.innerHTML = `<span class="legend-swatch" style="background:none;border:2px solid ${color};border-radius:50%"></span>${k === 'good' ? 'Bargain outlier' : 'Overpriced outlier'}`;
+  legendEl.appendChild(item);
+});
+
+// ---- regression ----
+const xs = DATA.map(d => d['Market value'] / 1e6);
+const ys = DATA.map(d => d['Potential score']);
+const n = xs.length;
+const sumX = xs.reduce((a,b)=>a+b,0), sumY = ys.reduce((a,b)=>a+b,0);
+const meanX = sumX/n, meanY = sumY/n;
+let num=0, den=0;
+for (let i=0;i<n;i++){ num += (xs[i]-meanX)*(ys[i]-meanY); den += (xs[i]-meanX)**2; }
+const slope = num/den, intercept = meanY - slope*meanX;
+DATA.forEach(d => {
+  const x = d['Market value']/1e6;
+  d._residual = d['Potential score'] - (slope*x + intercept);
+});
+
+const sortedByResidual = [...DATA].sort((a,b)=>b._residual - a._residual);
+const topGood = sortedByResidual.slice(0,2);
+const topBad = sortedByResidual.slice(-2).reverse();
+const flagged = new Set([...topGood, ...topBad].map(d=>d.Player));
+
+// ---- scatter geometry ----
+const W = 1000, H = 520;
+const M = { top: 20, right: 24, bottom: 46, left: 54 };
+const plotW = W - M.left - M.right, plotH = H - M.top - M.bottom;
+const xMax = Math.max(...xs) * 1.04;
+const xMin = 0;
+const yMax = Math.max(...ys) * 1.08;
+const yMin = Math.min(...ys, 0) - 0.6;
+
+function px(x){ return M.left + (x - xMin) / (xMax - xMin) * plotW; }
+function py(y){ return M.top + plotH - (y - yMin) / (yMax - yMin) * plotH; }
+
+const svg = document.getElementById('scatter');
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+// gridlines (y)
+const yTicks = 6;
+for (let i=0;i<=yTicks;i++){
+  const y = yMin + (yMax-yMin)*i/yTicks;
+  const yPix = py(y);
+  svg.appendChild(el('line', {x1:M.left, x2:W-M.right, y1:yPix, y2:yPix, class:'gridline'}));
+  const t = el('text', {x:M.left-10, y:yPix+4, class:'axis-label', 'text-anchor':'end'});
+  t.textContent = y.toFixed(1);
+  svg.appendChild(t);
+}
+// x ticks
+const xTicks = 6;
+for (let i=0;i<=xTicks;i++){
+  const x = xMin + (xMax-xMin)*i/xTicks;
+  const xPix = px(x);
+  const t = el('text', {x:xPix, y:H-M.bottom+22, class:'axis-label', 'text-anchor':'middle'});
+  t.textContent = '€' + x.toFixed(0) + 'M';
+  svg.appendChild(t);
+}
+svg.appendChild(el('line', {x1:M.left, x2:W-M.right, y1:H-M.bottom, y2:H-M.bottom, class:'baseline'}));
+const xLab = el('text', {x:(M.left+W-M.right)/2, y:H-6, class:'axis-label', 'text-anchor':'middle'});
+xLab.textContent = 'Market value'; svg.appendChild(xLab);
+const yLab = el('text', {x:16, y:M.top+plotH/2, class:'axis-label', 'text-anchor':'middle', transform:`rotate(-90 16 ${M.top+plotH/2})`});
+yLab.textContent = 'Potential score'; svg.appendChild(yLab);
+
+// trend line
+const tx1 = xMin, tx2 = xMax;
+svg.appendChild(el('line', {x1:px(tx1), y1:py(slope*tx1+intercept), x2:px(tx2), y2:py(slope*tx2+intercept), class:'trendline'}));
+
+// points
+const tooltip = document.getElementById('tooltip');
+const wrap = document.getElementById('scatter-wrap');
+DATA.forEach(d => {
+  const cx = px(d['Market value']/1e6), cy = py(d['Potential score']);
+  const g = el('g', {class:'pt' + (flagged.has(d.Player) ? ' flagged' : '')});
+  const isGood = flagged.has(d.Player) && d._residual > 0;
+  const isBad = flagged.has(d.Player) && d._residual < 0 && topBad.includes(d);
+  if (flagged.has(d.Player)) {
+    g.appendChild(el('circle', {cx, cy, r:9, class:'pt-ring', stroke: isGood ? 'var(--good)' : 'var(--critical)'}));
+  }
+  const shape = POS_SHAPE[d.Position];
+  if (shape === 'diamond') {
+    g.appendChild(el('rect', {x:cx-4.6, y:cy-4.6, width:9.2, height:9.2, transform:`rotate(45 ${cx} ${cy})`, fill:POS_COLOR[d.Position], stroke:'var(--surface)', 'stroke-width':1.5, opacity:0.88}));
+  } else {
+    g.appendChild(el('circle', {cx, cy, r:5.5, fill:POS_COLOR[d.Position], stroke:'var(--surface)', 'stroke-width':1.5, opacity:0.82}));
+  }
+  g.addEventListener('mousemove', (e) => {
+    const rect = wrap.getBoundingClientRect();
+    const scale = rect.width / W;
+    tooltip.style.opacity = 1;
+    tooltip.style.left = (cx*scale + 14) + 'px';
+    tooltip.style.top = (cy*scale - 10) + 'px';
+    tooltip.innerHTML = `<span class="t-name">${d.Player}</span>${d.Position} · €${(d['Market value']/1e6).toFixed(2)}M<br>Potential ${d['Potential score'].toFixed(2)} (${d._residual>=0?'+':''}${d._residual.toFixed(2)} vs. trend)`;
+  });
+  g.addEventListener('mouseleave', () => { tooltip.style.opacity = 0; });
+  svg.appendChild(g);
+});
+
+// direct labels for flagged outliers
+[...topGood, ...topBad].forEach(d => {
+  const cx = px(d['Market value']/1e6), cy = py(d['Potential score']);
+  const good = d._residual > 0;
+  const t = el('text', {x: cx + 12, y: cy + (good ? -8 : 16), class:'outlier-label ' + (good?'good':'bad')});
+  t.textContent = d.Player;
+  svg.appendChild(t);
+});
+
+// ---- table view ----
+const tbody = document.getElementById('table-body');
+[...DATA].sort((a,b)=>b._residual - a._residual).forEach(d => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${d.Player}</td>
+    <td><span class="pos-chip"><span class="pos-dot" style="background:${POS_COLOR[d.Position]}"></span>${d.Position}</span></td>
+    <td class="num">€${(d['Market value']/1e6).toFixed(2)}M</td>
+    <td class="num">${d['Potential score'].toFixed(2)}</td>
+    <td class="num" style="color:${d._residual>=0?'var(--good)':'var(--critical)'}">${d._residual>=0?'+':''}${d._residual.toFixed(2)}</td>`;
+  tbody.appendChild(tr);
+});
+
+document.getElementById('btn-chart').addEventListener('click', () => {
+  document.getElementById('scatter-wrap').style.display = '';
+  document.getElementById('table-view').style.display = 'none';
+  document.getElementById('btn-chart').setAttribute('aria-pressed','true');
+  document.getElementById('btn-table').setAttribute('aria-pressed','false');
+});
+document.getElementById('btn-table').addEventListener('click', () => {
+  document.getElementById('scatter-wrap').style.display = 'none';
+  document.getElementById('table-view').style.display = '';
+  document.getElementById('btn-chart').setAttribute('aria-pressed','false');
+  document.getElementById('btn-table').setAttribute('aria-pressed','true');
+});
+
+// ---- bargains panel ----
+const bargains = [
+  { name: 'Ville Koski', meta: 'Defender · Alavés', pct: '+61%' },
+  { name: 'Jesús Vázquez', meta: 'Defender · Valencia', pct: '+54%' },
+  { name: 'De Galarreta', meta: 'Midfielder · Athletic', pct: '+27%' },
+];
+const bargainsEl = document.getElementById('bargains');
+bargains.forEach(b => {
+  const row = document.createElement('div');
+  row.className = 'bargain-row';
+  row.innerHTML = `<div><div class="bargain-name">${b.name}</div><div class="bargain-meta">${b.meta}</div></div><div class="bargain-pct">${b.pct}</div>`;
+  bargainsEl.appendChild(row);
+});
+
+// ---- ranking panel ----
+const ranking = [
+  { name:'Raphinha', meta:'Forward · Rival squad', score:'14.95' },
+  { name:'Mbappé', meta:'Forward · Rival squad', score:'12.95' },
+  { name:'Bellingham', meta:'Midfielder · Rival squad', score:'12.31' },
+  { name:'Yamal', meta:'Forward · Rival squad', score:'11.09' },
+  { name:'Aubameyang', meta:'Forward · Rival squad', score:'10.40' },
+  { name:'Fermín', meta:'Midfielder · My team', score:'10.14' },
+];
+const rankingEl = document.getElementById('ranking');
+ranking.forEach((r,i) => {
+  const row = document.createElement('div');
+  row.className = 'rank-row';
+  row.innerHTML = `<div class="rank-n">${i+1}</div><div><div class="rank-name">${r.name}</div><div class="rank-meta">${r.meta}</div></div><div class="rank-score">${r.score}</div>`;
+  rankingEl.appendChild(row);
+});
+</script>
