@@ -1,0 +1,8 @@
+.env
+.claude
+output/
+__pycache__/
+*.pyc
+.venv/
+*.xlsx
+.ipynb_checkpoints/
