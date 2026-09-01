@@ -4,6 +4,8 @@ Python tools to analyze your [Biwenger](https://biwenger.as.com/) (fantasy footb
 
 Everything is built on top of the **unofficial Biwenger API** (there's no public documentation), by inspecting real responses. If Biwenger changes something, this is the first place to look — see [How it works under the hood](#how-it-works-under-the-hood).
 
+🔗 **[Live dashboard](https://lluisgonzaga21.github.io/biwenger-assistant/dashboard.html)** — a snapshot built from real data of my league (market, squad, bargains and signing recommendations), no setup needed to take a look.
+
 > ⚠️ This is a personal project, not affiliated with Biwenger/AS.com. Use at your own risk: it's an undocumented API and can break if Biwenger changes its backend. The "operations" part (bidding/clause buyouts) moves real money in your team — read the [safety](#safety-when-biddingbuying-out-a-clause) section before using it.
 
 ## Table of contents
